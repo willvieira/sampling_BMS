@@ -37,3 +37,10 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# raw data
+archives/*
+rawLayers/*
+data/*
+outputs/*
+docs/*
