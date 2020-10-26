@@ -3,6 +3,8 @@
 
 library(raster)
 library(sf)
+library(glue)
+library(stringr)
 
 load("data/spatialVectors.rda")
 land_ca <- raster("data/landcover_ca_30m.tif")
@@ -41,7 +43,7 @@ prevalence_hab <- function(district, landcover){
 library(doParallel)
 
 # Open Cluster
-registerDoParallel(cores = detectCores()-1)
+registerDoParallel(cores = detectCores()-2)
 # Compute prevalence for quebec landcover
 prev_qc_by_district <- foreach(i = seq_len(nrow(districts)), .packages = "raster") %dopar% {
     try(prevalence_hab(district = districts[i,], landcover = land_qc))
@@ -62,44 +64,58 @@ prev_all_qc <- do.call(rbind, prev_qc_by_district[which(sapply(prev_qc_by_distri
 # Select ecoregion ---------------------------------------------------------
 ###############################################
 
-load("outputs/prevalence_by_district.rda")
-# future iterator
-sel_district = 300
+load("data/prevalence_by_district.rda")
 
-# Schefferville district
-district_scheffer <- districts[districts$ECODISTRIC == sel_district,]
+for (id in districts$ECODISTRIC) {
 
-# Select hexagons within the area (st_insersects preserve topology)
-hexa_area <- hexa[st_intersects(hexa, district_scheffer, sparse = FALSE),]
+    print(glue('District {id} -- Process {which(districts$ECODISTRIC == id)} on {length(districts$ECODISTRIC)}'))
+    # Select district
+    district <- districts[districts$ECODISTRIC == id,]
 
-# Select prevalence for that district
-prev_district_ca <- subset(prev_all_ca, ID_poly == sel_district)
-prev_district_qc <- subset(prev_all_qc, ID_poly == sel_district)
-
-# Extract habitat values within each hexagons -- FOR CA
-pb_hab_hexas_qc <- foreach(i = seq_len(nrow(hexa_area)), .packages = "raster", .combine = c) %dopar% {
-    count_hab <- as.data.frame(table(extract(land_qc, hexa_area[i,])))
+    # Select hexagons within the area (st_insersects preserve topology)
+    hexa_district <- hexa[which(st_intersects(hexa, district, sparse = FALSE)),]
     
-    if(nrow(count_hab) > 0){
-        prev_count_hab <- merge(count_hab, prev_district_qc, by.x="Var1", by.y="code" ,all.x=TRUE)
-        sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
-    } else {
-        NA
+    # Select prevalence for that district
+    prev_qc_district <- subset(prev_all_qc, ID_poly == id)
+    prev_ca_district <- subset(prev_all_ca, ID_poly == id)
+
+    # Extract habitat values within each hexagons -- FOR QC
+    print(glue('Start to extract habitat values for QC'))
+
+    hab_qc <- foreach(i = seq_len(nrow(hexa_district)), .packages = "raster", .combine = c) %dopar% {    
+        count_qc <- as.data.frame(table(extract(land_qc, hexa_district[i,])))
+        if(nrow(count_qc) > 0){
+            prev_count_hab <- merge(count_qc, prev_qc_district, by.x="Var1", by.y="code" ,all.x=TRUE)
+            sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
+        } else {
+            NA
+        }
     }
+
+    # Extract habitat values within each hexagons -- FOR CA
+    print(glue('Start to extract habitat values for CA'))
+    hab_ca <- foreach(i = seq_len(nrow(hexa_district)), .packages = "raster", .combine = c) %dopar% {    
+        count_ca <- as.data.frame(table(extract(land_ca, hexa_district[i,])))
+        if(nrow(count_ca) > 0){
+            prev_count_hab <- merge(count_ca, prev_ca_district, by.x="Var1", by.y="code" ,all.x=TRUE)
+            sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
+        } else {
+            NA
+        }
+    }
+
+    # Assigning new columns with hab prob
+    hexa_district$hab_ca <- hab_ca
+    hexa_district$hab_qc <- hab_qc
+
+    # Add new phab columns in attributes table
+    print(glue('Saving'))
+
+    # Writing results in corresponding folder
+    path <- glue('outputs/{tolower(str_replace_all(unique(district$REGION_NAM), " ", "_"))}/{id}/')
+    dir.create(path, recursive = TRUE, showWarnings = FALSE)
+
+    write_sf(hexa_district, paste0(path,"hexa_phab.shp"))
 }
 
-# Extract habitat values within each hexagons -- FOR QC
-pb_hab_hexas_ca <- foreach(i = seq_len(nrow(hexa_area)), .packages = "raster", .combine = c) %dopar% {
-    count_hab <- as.data.frame(table(extract(land_ca, hexa_area[i,])))
-    
-    if(nrow(count_hab) > 0){
-        prev_count_hab <- merge(count_hab, prev_district_ca, by.x="Var1", by.y="code" ,all.x=TRUE)
-        sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
-    } else {
-        NA
-    }
-}
 
-hexa_area$prob_hab_qc <- pb_hab_hexas_qc
-hexa_area$prob_hab_ca <- pb_hab_hexas_ca
-# st_write(hexa_area, "outputs/schefferVille/hexas_shefferville.shp")

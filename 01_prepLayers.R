@@ -11,7 +11,7 @@ library(spatstat)
 library(maptools)
 
 # Set raster tmp folder
-rasterOptions(tmpdir = "/data/sviss/tmp")
+# rasterOptions(tmpdir = "/data/sviss/tmp")
 
 ###############################################
 # Prepare spatial layers ---------------------------------------------------------
@@ -33,7 +33,7 @@ hexa <- read_sf("rawLayers/Hexagons_w_Attributes.shp")
 # Read LCC2015: Habitat proportion
 land_ca <- raster("rawLayers/CAN_LC_2015_CAL.tif")
 
-# Read Lancover Québec (Missing in )
+# Read Lancover QuÃ©bec
 # See https://www.donneesquebec.ca/recherche/fr/dataset/vegetation-du-nord-quebecois
 # Metadata: https://TinyURL.com/uyvswpb
 land_qc <- st_read("rawLayers/veg_nord_53.gdb", layer = "veg_nord")
@@ -49,7 +49,7 @@ trails <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "Sentiers")
 # Read Aeroports
 aeroports <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "Aeroports_SOBQ")
 
-####### TRANSFORM: Crop and reproject on study area
+####### TRANSFORM: reproject on study area
 
 # Reproject all spatial layers under land_qc cover projection
 area <- st_transform(area, st_crs(land_qc))
@@ -68,22 +68,23 @@ aeroports <- st_transform(aeroports, st_crs(land_qc))
 # Crop land_ca with area (reduce memory alloc)
 area_lcc_ca <- st_transform(area, projection(land_ca))
 land_ca <- mask(crop(land_ca, area_lcc_ca), area_lcc_ca)
+
 # Reproject
-#raster::beginCluster() # Parallel if needed
+raster::beginCluster(n = 12) # Parallel if needed
 land_ca <- projectRaster(land_ca, crs=st_crs(land_qc)$proj4string, method = "ngb")
-#raster::endCluster()
+raster::endCluster()
 
 # From Ontario script (see ON/03-PrepareHexagons_LCC2015_Ontario.R)
 # Removing Snow and ice, water, Urban, and cropland to NA
 # Reclassify
-from_to <- matrix(c(0:19,c(NA,1:14,NA,16,rep(NA,3))), ncol = 2)
-land_ca <- reclassify(land_ca,from_to)
+from_to <- matrix(c(0:19, c(NA, 1:14, NA, 16, rep(NA, 3))), ncol = 2)
+land_ca <- reclassify(land_ca, from_to)
 
 ##### LCC QUEBEC #####
 
 # Transform land_qc to raster
 # Select habitat type column
-land_qc <- select(land_qc, CL_CARTO)
+land_qc <- dplyr::select(land_qc, CL_CARTO)
 # Store metadata
 md_co_ter <- data.frame(gov_code = levels(land_qc$CL_CARTO), code = 1:nlevels(land_qc$CL_CARTO))
 
@@ -92,7 +93,7 @@ land_qc$CL_CARTO <- as.numeric(land_qc$CL_CARTO)
 
 # Rasterize landcover polygons QC with same resolution than land_ca
 library(fasterize)
-land_qc <- fasterize(land_qc, raster(land_qc, res = 30), field = "CL_CARTO", fun="first")
+land_qc <- fasterize(land_qc, raster(land_qc, res = 30), field = "CL_CARTO", fun = "first")
 
 # Crop land_ca with study area (reduce memory alloc)
 land_qc <- crop(land_qc, area)
@@ -108,7 +109,7 @@ md_co_ter$new_code[which(md_co_ter$gov_code == "EAU")] <- NA
 md_co_ter$new_code[which(md_co_ter$gov_code == "NE")] <- NA
 # Infra humaine (Code: IH)
 md_co_ter$new_code[which(md_co_ter$gov_code == "IH")]  <- NA
-# Ligne de transport éléc. (Code: LTE)
+# Ligne de transport ï¿½lï¿½c. (Code: LTE)
 md_co_ter$new_code[which(md_co_ter$gov_code == "LTE")]  <- NA
 
 # Run reclassification on landcover QC
@@ -125,4 +126,3 @@ writeRaster(land_qc, filename = "data/landcover_qc_30m", format = "GTiff")
 
 # Save vector data
 save(area, districts, hexa, roads, trails, aeroports, file = "data/spatialVectors.rda")
-
