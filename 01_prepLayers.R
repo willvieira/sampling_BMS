@@ -9,10 +9,11 @@ library(dplyr)
 library(mapview)
 library(spatstat)
 library(maptools)
+library(ggspatial)
 
 # Set raster tmp folder
 # rasterOptions(tmpdir = "/data/sviss/tmp")
-
+    
 ###############################################
 # Prepare spatial layers ---------------------------------------------------------
 ###############################################
@@ -23,9 +24,13 @@ library(maptools)
 area <- read_sf("rawLayers/SOBQ_Nord.shp")
 
 # Read eco districts
+# 17 unique ECOREGIONS
+# 53 unique ECODISTRICS
 districts <- read_sf("rawLayers/Ecodistricts_SOBQ_Nord.shp")
+#mapview::mapview(districts, zcol = 'ECODISTRIC')
 
-# Read Hexagons ---------------------------------------------------------
+# Read Hexagons
+# 414163 unique ET_ID
 hexa <- read_sf("rawLayers/Hexagons_w_Attributes.shp")
 
 ######## IMPORT: landcover qc & ca
@@ -46,7 +51,7 @@ roads <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "road_segment_1")
 # Read trails
 trails <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "Sentiers")
 
-# Read Aeroports
+# Read Aeroportsq
 aeroports <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "Aeroports_SOBQ")
 
 ####### TRANSFORM: reproject on study area
