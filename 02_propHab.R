@@ -16,8 +16,8 @@ land_qc <- raster("data/landcover_qc_30m.tif")
 # See page 32: Protocols/BMS_Boreal Monit_LB_DRAFT_May2_2018.docx
 
 # Function to compute the prevalence habitat (area by habitat / area district) for each ecodistricts
-prevalence_hab <- function(district, landcover){
-
+prevalence_hab <- function(district, landcover)
+{
     # Subselect area
     landcover <- mask(crop(landcover, district), district)
 
@@ -26,10 +26,8 @@ prevalence_hab <- function(district, landcover){
     freq_hab <- as.data.frame(table(landcover[]))
     names(freq_hab) <- c("code", "freq")
 
-    # Compute the area based on raster res
-    freq_hab$area_hab <- freq_hab$freq * (res(landcover)[1] * res(landcover)[2])
-    # Compute inclusion proba
-    freq_hab$incl_prob <- 1 / nrow(freq_hab) / freq_hab$area_hab
+    # Compute inclusion probability
+    freq_hab$incl_prob <- 1 / (nrow(freq_hab)) / freq_hab$freq
 
     # Add poly ID
     freq_hab$ID_poly <- district$ECODISTRIC
