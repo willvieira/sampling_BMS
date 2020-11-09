@@ -1,14 +1,22 @@
+########################################################################
 ### Title: Compute inclusion probability based on habitat prevalence
 ### Author: Steve Vissault
+### Last edited by Will Vieira
+########################################################################
+
 
 library(raster)
 library(sf)
 library(glue)
 library(stringr)
+library(doParallel)
+doParallel::registerDoParallel(6)
 
 load("data/spatialVectors.rda")
 land_ca <- raster("data/landcover_ca_30m.tif")
-land_qc <- raster("data/landcover_qc_30m.tif")
+#land_qc <- raster("data/landcover_qc_30m.tif")
+
+
 
 ###############################################
 # Habitat prevalence within each ecoregions ---------------------------------------------------------
@@ -37,32 +45,55 @@ prevalence_hab <- function(district, landcover)
 }
 
 
-# Parallelize function with doParallel
-library(doParallel)
-
-# Open Cluster
-registerDoParallel(cores = detectCores()-2)
-# Compute prevalence for quebec landcover
-prev_qc_by_district <- foreach(i = seq_len(nrow(districts)), .packages = "raster") %dopar% {
-    try(prevalence_hab(district = districts[i,], landcover = land_qc))
+# Canada
+prev_ca_by_district <- list()
+for(i in seq_len(nrow(districts)))
+{
+    prev_ca_by_district[[i]] <- prevalence_hab(district = districts[i,], landcover = land_ca)
+    cat('   Computing prevalence ', round(i/nrow(districts) * 100, 2), '%\r')
 }
 
-# Compute prevalence for canada landcover
-prev_ca_by_district <- foreach(i = seq_len(nrow(districts)), .packages = "raster") %dopar% {
-    try(prevalence_hab(district = districts[i,], landcover = land_ca))
-}
+# # Quebec
+# prev_qc_by_district <- list()
+# for(i in seq_len(nrow(districts)))
+# {
+#     prev_qc_by_district[[i]] <- prevalence_hab(district = districts[i,], landcover = land_ca)
+#     print(i)
+# }
+
+
 
 ####### Save prevalence by district
 prev_all_ca <- do.call(rbind, prev_ca_by_district[which(sapply(prev_ca_by_district, class) == "data.frame")])
-prev_all_qc <- do.call(rbind, prev_qc_by_district[which(sapply(prev_qc_by_district, class) == "data.frame")])
-# save(prev_all_qc, prev_all_ca, file="outputs/prevalence_by_district.rda")
+saveRDS(prev_all_ca, 'data/prev_all_ca.RDS')
+#prev_all_qc <- do.call(rbind, prev_qc_by_district[which(sapply(prev_qc_by_district, class) == "data.frame")])
+#saveRDS(prev_all_qc, 'data/prev_all_qc.RDS')
+
+
+# viz how probability vary in function of # of veg type (code) and its frequence
+par(mfrow = c(1, 2))
+# qc
+nbCode <- seq(11, 49)
+freqCode <- seq(min(prev_all_qc$freq), quantile(prev_all_qc$freq, .75), by = 2000)
+z <- outer(nbCode, freqCode, function(nbCode, freqCode) 1/nbCode/freqCode)
+fields::image.plot(nbCode, freqCode, z, xlab = '# Vegetation type', ylab = 'Veg Freq')
+points(prev_all_qc$code, prev_all_qc$freq, cex = 0.5, pch = 19, col = rgb(0, 0, 0, 0.6))
+# ca
+nbCode <- seq(6, 11)
+freqCode <- seq(min(prev_all_ca$freq), quantile(prev_all_ca$freq, .75), by = 2000)
+z <- outer(nbCode, freqCode, function(nbCode, freqCode) 1/nbCode/freqCode)
+fields::image.plot(nbCode, freqCode, z, xlab = 'Vegetation type', ylab = '')
+points(prev_all_ca$code, prev_all_ca$freq, cex = 0.5, pch = 19, col = rgb(0, 0, 0, 0.6))
+
+
+
 
 
 ###############################################
 # Select ecoregion ---------------------------------------------------------
 ###############################################
 
-load("data/prevalence_by_district.rda")
+prev_all_ca <- readRDS('data/prev_all_ca.RDS')
 
 for (id in districts$ECODISTRIC) {
 
@@ -71,24 +102,24 @@ for (id in districts$ECODISTRIC) {
     district <- districts[districts$ECODISTRIC == id,]
 
     # Select hexagons within the area (st_insersects preserve topology)
-    hexa_district <- hexa[which(st_intersects(hexa, district, sparse = FALSE)),]
+    hexa_district <- hexa[which(st_intersects(hexa, district, sparse = FALSE)), ]
     
     # Select prevalence for that district
-    prev_qc_district <- subset(prev_all_qc, ID_poly == id)
+    #prev_qc_district <- subset(prev_all_qc, ID_poly == id)
     prev_ca_district <- subset(prev_all_ca, ID_poly == id)
 
     # Extract habitat values within each hexagons -- FOR QC
-    print(glue('Start to extract habitat values for QC'))
+    #print(glue('Start to extract habitat values for QC'))
 
-    hab_qc <- foreach(i = seq_len(nrow(hexa_district)), .packages = "raster", .combine = c) %dopar% {    
-        count_qc <- as.data.frame(table(extract(land_qc, hexa_district[i,])))
-        if(nrow(count_qc) > 0){
-            prev_count_hab <- merge(count_qc, prev_qc_district, by.x="Var1", by.y="code" ,all.x=TRUE)
-            sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
-        } else {
-            NA
-        }
-    }
+    #hab_qc <- foreach(i = seq_len(nrow(hexa_district)), .packages = "raster", .combine = c) %dopar% {    
+    #    count_qc <- as.data.frame(table(raster::extract(land_qc, hexa_district[i,])))
+    #    if(nrow(count_qc) > 0){
+    #        prev_count_hab <- merge(count_qc, prev_qc_district, by.x = "Var1", by.y = "code" , all.x = TRUE)
+    #        sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
+    #    } else {
+    #        NA
+    #    }
+    #}
 
     # Extract habitat values within each hexagons -- FOR CA
     print(glue('Start to extract habitat values for CA'))
@@ -104,7 +135,7 @@ for (id in districts$ECODISTRIC) {
 
     # Assigning new columns with hab prob
     hexa_district$hab_ca <- hab_ca
-    hexa_district$hab_qc <- hab_qc
+    #hexa_district$hab_qc <- hab_qc
 
     # Add new phab columns in attributes table
     print(glue('Saving'))
@@ -116,4 +147,4 @@ for (id in districts$ECODISTRIC) {
     write_sf(hexa_district, paste0(path,"hexa_phab.shp"))
 }
 
-
+stopImplicitCluster()
