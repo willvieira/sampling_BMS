@@ -57,12 +57,12 @@ aeroports <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "Aeroports_SOBQ"
 ####### TRANSFORM: reproject on study area
 
 # Reproject all spatial layers under land_qc cover projection
-area <- st_transform(area, st_crs(land_qc))
-districts <- st_transform(districts, st_crs(land_qc))
-hexa <- st_transform(hexa, st_crs(land_qc))
-roads <- st_transform(roads, st_crs(land_qc))
-trails <- st_transform(trails, st_crs(land_qc))
-aeroports <- st_transform(aeroports, st_crs(land_qc))
+area <- st_transform(area, st_crs(land_ca))
+districts <- st_transform(districts, st_crs(land_ca))
+hexa <- st_transform(hexa, st_crs(land_ca))
+roads <- st_transform(roads, st_crs(land_ca))
+trails <- st_transform(trails, st_crs(land_ca))
+aeroports <- st_transform(aeroports, st_crs(land_ca))
 
 ###############################################
 # Crop and reclassify landcover (CA & QC) ---------------------------------------------------------
