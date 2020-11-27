@@ -38,9 +38,13 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
+# macos
+.DS_Store
+
 # raw data
 archives/*
 rawLayers/*
 data/*
-outputs/*
+output/*
 docs/*
+maps/*
