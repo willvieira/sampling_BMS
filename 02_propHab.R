@@ -48,25 +48,18 @@ prevalence_hab <- function(ecoregion, landcover)
 # Using land Canada
 ###########################
 
-prev_ca_by_ecoregion <- list()
-for(i in unique(districts$ECOREGION))
-{
-    prev_ca_by_ecoregion[[i]] <- prevalence_hab(ecoregion = subset(districts, ECOREGION == i), landcover = land_ca)
-    cat('   Computing prevalence ', i, 'of', length(unique(districts$ECOREGION)), '\r')
+# Same as above but in parallel
+prev_ca_by_ecoregion <- foreach(i = unique(districts$ECOREGION), .packages = "raster") %dopar% {
+    try(prevalence_hab(ecoregion = subset(districts, ECOREGION == i), landcover = land_ca))
 }
 
 
 # # Using land Quebec
 ###########################
 
-# prev_qc_by_ecoregion <- list()
-# for(i in unique(districts$ECOREGION))
-# {
-#     prev_qc_by_ecoregion[[i]] <- prevalence_hab(ecoregion = subset(districts, ECOREGION == i), landcover = land_qc)
-#     cat('   Computing prevalence ', i, 'of', length(unique(districts$ECOREGION)), '\r')
+# prev_qc_by_ecoregion <- foreach(i = unique(districts$ECOREGION), .packages = "raster") %dopar% {
+#     try(prevalence_hab(ecoregion = subset(districts, ECOREGION == i), landcover = land_qc))
 # }
-
-
 
 
 ####### Save prevalence by district
@@ -106,7 +99,7 @@ prev_all_ca <- readRDS('data/prev_all_ca.RDS')
 for (id in unique(districts$ECOREGION)[14:17]) {
 
     print(glue('Ecoregion {id} -- Process {which(unique(districts$ECOREGION) == id)} on {length(unique(districts$ECOREGION))}'))
-
+    
     # Select ecoregion
     ecoregion <- districts[districts$ECOREGION == id, ]
 
