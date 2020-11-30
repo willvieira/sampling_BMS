@@ -131,11 +131,11 @@ for (id in unique(districts$ECOREGION)) {
         {
             if(sum(count_ca$Freq) > 1000) # ensure that hexagon has at least 100 pixels for secondary sampling
             {
-            prev_count_hab <- merge(count_ca, prev_ca_ecoregion, by.x="Var1", by.y="code" ,all.x=TRUE)
-            sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
-        } else {
-            NA
-        }
+                prev_count_hab <- merge(count_ca, prev_ca_ecoregion, by.x="Var1", by.y="code" ,all.x=TRUE)
+                sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
+            } else {
+                NA
+            }
         } else {
             NA
         }
