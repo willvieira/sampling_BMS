@@ -96,7 +96,7 @@ saveRDS(prev_all_ca, 'data/prev_all_ca.RDS')
 
 prev_all_ca <- readRDS('data/prev_all_ca.RDS')
 
-for (id in unique(districts$ECOREGION)[14:17]) {
+for (id in unique(districts$ECOREGION)) {
 
     print(glue('Ecoregion {id} -- Process {which(unique(districts$ECOREGION) == id)} on {length(unique(districts$ECOREGION))}'))
     
