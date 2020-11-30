@@ -127,9 +127,15 @@ for (id in unique(districts$ECOREGION)) {
     print(glue('Start to extract habitat values for CA'))
     hab_ca <- foreach(i = seq_len(nrow(hexa_ecoregion)), .packages = "raster", .combine = c) %dopar% {    
         count_ca <- as.data.frame(table(extract(land_ca, hexa_ecoregion[i, ])))
-        if(nrow(count_ca) > 0){
+        if(nrow(count_ca) > 0)
+        {
+            if(sum(count_ca$Freq) > 1000) # ensure that hexagon has at least 100 pixels for secondary sampling
+            {
             prev_count_hab <- merge(count_ca, prev_ca_ecoregion, by.x="Var1", by.y="code" ,all.x=TRUE)
             sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
+        } else {
+            NA
+        }
         } else {
             NA
         }
