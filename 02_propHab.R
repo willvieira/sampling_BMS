@@ -89,11 +89,10 @@ saveRDS(prev_all_ca, 'data/prev_all_ca.RDS')
 
 
 ###############################################
-# Select ecoregion ---------------------------------------------------------
+# Get sum of habitat probability for each hexagon using habitat prevalence from the ecoregion
 ###############################################
 
-
-
+# load data calculated above
 prev_all_ca <- readRDS('data/prev_all_ca.RDS')
 
 for (id in unique(districts$ECOREGION)) {
