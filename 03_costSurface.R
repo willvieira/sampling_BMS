@@ -8,6 +8,8 @@ library(mapview)
 library(raster)
 library(fasterize)
 library(doParallel)
+doParallel::registerDoParallel(parallel::detectCores() - 2)
+
 
 # Load spatial vectors
 load("data/spatialVectors.rda")
@@ -98,6 +100,43 @@ rm(cost_stack)
 
 
 
+
+#####################################################################
+# Extract mean cost for each exagon
+#####################################################################
+
+# load min cost raster calculated above
+cost_min <- raster::raster('data/min_cost.tif')
+
+
+for (id in unique(districts$ECOREGION)) {
+
+    cat('Ecoregion', id, '-- Process', which(unique(districts$ECOREGION) == id), 'on', length(unique(districts$ECOREGION)), '\n')
+    
+    # Select ecoregion
+    ecoregion <- districts[districts$ECOREGION == id, ]
+
+    # Load hexagons of ecoregion (generated from `script 02_probHab.R`)
+    hexa_ecoregion <- sf::st_read(paste0('output/', tolower(gsub(' ', '_', unique(ecoregion$REGION_NAM))), '_', id, '/hexa_phab.shp'))
+
+    # Extract habitat values within each hexagons -- FOR CA
+    print('Start to extract habitat values for CA')
+    costMin <- foreach(i = seq_len(nrow(hexa_ecoregion)), .packages = "raster", .combine = c) %dopar% {    
+        raster::extract(cost_min, hexa_ecoregion[i, ], fun = mean)
+    }
+
+    # Assigning new columns with hab prob
+    hexa_ecoregion$cost_min <- costMin
+    #hexa_ecoregion$hab_qc <- hab_qc
+
+    # Add new phab columns in attributes table
+    print('Saving')
+
+    # Writing results in corresponding folder
+    write_sf(hexa_ecoregion, paste0('output/', tolower(gsub(' ', '_', unique(ecoregion$REGION_NAM))), '_', id, '/hexa_cost.shp'))
+}
+
+stopImplicitCluster()
 
 
 
