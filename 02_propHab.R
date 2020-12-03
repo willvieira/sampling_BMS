@@ -174,7 +174,8 @@ for(id in unique(districts$ECOREGION))
     # plot
     par(mfrow = c(1, 2), mar = c(2.5, 2.5, 2.5, 3.5), mgp = c(1.4, 0.2, 0), tck = -.008)
     cuts <- cut(seq(0, 100, 5), c(-Inf,50,Inf))
-    hist(hexa_ecoregion$propNA * 100, breaks = seq(0, 100, 5), main = '', ylab = 'Frequency (# of hexagons)', xlab = 'Proportion of NA pixels within each hexagon (%)', col = c(rgb(100, 100, 100, 200, maxColorValue = 255), rgb(71, 141, 255, 200, maxColorValue = 255))[cuts])
+    h <- hist(hexa_ecoregion$propNA * 100, breaks = seq(0, 100, 5), main = '', ylab = 'Frequency (# of hexagons)', xlab = 'Proportion of NA pixels within each hexagon (%)', col = c(rgb(100, 100, 100, 200, maxColorValue = 255), rgb(71, 141, 255, 200, maxColorValue = 255))[cuts])
+    legend('topright', legend = paste0(round(sum(h$counts[h$mids > 50])/sum(h$counts)*100, 1), '% of hexagons have a\nproportion > 50% of NA pixels'), cex = .9, bty = 'n')
     box()
     mtext(paste('Ecoregion', id, '-', unique(ecoregion$REGION_NAM)), 3, line = -2, outer = TRUE)
     
