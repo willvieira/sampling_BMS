@@ -172,10 +172,19 @@ for(id in unique(districts$ECOREGION))
     hexa_ecoregion <- sf::st_read(paste0('output/', tolower(gsub(' ', '_', unique(ecoregion$REGION_NAM))), '_', id, '/hexa_phab.shp'), quiet = TRUE)
 
     # plot
-    par(mfrow = c(1, 2), mar = c(2.5, 2.5, 2.5, 0.5), mgp = c(1.4, 0.2, 0), tck = -.008)
-    hist(hexa_ecoregion$hab_ca, main = '', ylab = 'Frequency (# of hexagons)', xlab = 'Habitat probability of hexagons', breaks = 30)
-    hist(hexa_ecoregion$propNA * 100, main = '', ylab = 'Frequency (# of hexagons)', xlab = 'Proportion of NA pixels within each hexagon (%)', breaks = 30)
+    par(mfrow = c(1, 2), mar = c(2.5, 2.5, 2.5, 3.5), mgp = c(1.4, 0.2, 0), tck = -.008)
+    hexa_ecoFilt <- subset(hexa_ecoregion, propNA >= 0.5)
+    xLim <- c(0, max(hexa_ecoregion$hab_ca, na.rm = TRUE))
+    h <- hist(hexa_ecoregion$hab_ca, main = '', ylab = 'Frequency (# of hexagons)', xlab = 'Habitat probability of hexagons', breaks = 30, col = rgb(100, 100, 100, 210, maxColorValue = 255))
+    par(new = TRUE)
+    hist(hexa_ecoFilt$hab_ca, breaks = h$breaks, xlim = xLim, xlab = '', ylab = '', main = '', xaxt = 'n', yaxt = 'n', col = rgb(116, 169, 255, 140, maxColorValue = 255))
+    axis(4, col = rgb(71, 141, 255, maxColorValue = 255), col.axis = rgb(71, 141, 255, maxColorValue = 255))
+    mtext('Frequency (hexagons with more than 50% of NA pixels', 4, line = 1, cex = 0.9, col = rgb(71, 141, 255, maxColorValue = 255))
+    box()
+    
+    cuts <- cut(seq(0, 100, 5), c(-Inf,50,Inf))
+    hist(hexa_ecoregion$propNA * 100, breaks = seq(0, 100, 5), main = '', ylab = 'Frequency (# of hexagons)', xlab = 'Proportion of NA pixels within each hexagon (%)', col = c(rgb(100, 100, 100, 200, maxColorValue = 255), rgb(71, 141, 255, 200, maxColorValue = 255))[cuts])
+    box()
     mtext(paste('Ecoregion', id, '-', unique(ecoregion$REGION_NAM)), 3, line = -2, outer = TRUE)
-
 }
 dev.off()
