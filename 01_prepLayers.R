@@ -1,19 +1,16 @@
 ### Title: Preparing spatial layers for analysis
 ### Author: Steve Vissault
+### Last edited by Will Vieira on Dec 17, 2020
+
 
 # Import Packages ---------------------------------------------------------
-library(spsurvey) # GRTS
 library(raster)
 library(sf)
-library(dplyr)
 library(mapview)
-library(spatstat)
-library(maptools)
-library(ggspatial)
 
 # Set raster tmp folder
 # rasterOptions(tmpdir = "/data/sviss/tmp")
-    
+
 ###############################################
 # Prepare spatial layers ---------------------------------------------------------
 ###############################################
@@ -21,13 +18,11 @@ library(ggspatial)
 ######## IMPORT: study area
 
 # Read study area
-area <- read_sf("rawLayers/SOBQ_Nord.shp")
+area <- read_sf("rawLayers/SOBQ_ATLAS_PERI_Micro_W.shp")
 
-# Read eco districts
-# 17 unique ECOREGIONS
-# 53 unique ECODISTRICS
-districts <- read_sf("rawLayers/Ecodistricts_SOBQ_Nord.shp")
-#mapview::mapview(districts, zcol = 'ECODISTRIC')
+# Read ecoregions
+districts <- read_sf("rawLayers/Ecoregions_Canada_20201209_W.shp")
+#mapview::mapview(districts, zcol = 'ECOREGION')
 
 # Read Hexagons
 # 414163 unique ET_ID
@@ -46,28 +41,62 @@ land_ca <- raster("rawLayers/CAN_LC_2015_CAL.tif")
 ######## IMPORT: layers for cost analysis
 
 # Read roads
-roads <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "road_segment_1")
+roads_qc <- st_read("rawLayers/Reseau_routier_SOBQ_ATLAS_W.shp")
+roads_lb <- st_read("rawLayers/Reseau_routier_Labrador_50kW.shp")
 
-# Read trails
-trails <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "Sentiers")
+# Read trails 
+trails <- st_read("rawLayers/Motoneiges_Qc_W.shp")
 
 # Read Aeroportsq
-aeroports <- st_read("rawLayers/Couches_SamplingR.gdb", layer = "Aeroports_SOBQ")
+aeroports_qc <- st_read("rawLayers/Aeroports_Qc_20KW.shp")
+aeroports_lb <- st_read("rawLayers/Aeroport_Labrador_50KW.shp")
 
-####### TRANSFORM: reproject on study area
+
+####### TRANSFORM: reproject on land_ca
 
 # Reproject all spatial layers under land_qc cover projection
 area <- st_transform(area, st_crs(land_ca))
 districts <- st_transform(districts, st_crs(land_ca))
 hexa <- st_transform(hexa, st_crs(land_ca))
-roads <- st_transform(roads, st_crs(land_ca))
+roads_qc <- st_transform(roads_qc, st_crs(land_ca))
+roads_lb <- st_transform(roads_lb, st_crs(land_ca))
 trails <- st_transform(trails, st_crs(land_ca))
+aeroports_qc <- st_transform(aeroports_qc, st_crs(land_ca))
+aeroports_lb <- st_transform(aeroports_lb, st_crs(land_ca))
+
+
+####### TRANSFORM: Crop and group on study area
 
 # Filter hexagons for study area (rule: hexagons must have centroid inside study area)
 hexa_cent <- hexa
 hexa_cent$geometry <- hexa %>% sf::st_centroid() %>% sf::st_geometry()
 hexa_cent <- hexa_cent[which(st_intersects(hexa_cent, area, sparse = FALSE)), ]
 hexa <- hexa[which(hexa$ET_Index %in% hexa_cent$ET_Index), ]
+
+districts <- st_intersection(districts, area)
+# We are not croping aeroports as some elements of these layers that
+# are outside study area, but close, may also be used to access sites
+# For roads and trails, we will expand (buffer) study area by 10 km to get roads and trails outside but close to the study area
+area_expanded <- st_buffer(area, dist = 10000)
+roads_qc <- st_crop(roads_qc, area_expanded)
+roads_lb <- st_crop(roads_lb, area_expanded)
+trails <- st_crop(trails, area_expanded)
+
+
+####### TRANSFORM: Group Quebec and Labrador layers
+# Aeroports (keep only ID in attribute table, and add qc OR lb to id of each aeroport)
+aeroports_qc <- setNames(aeroports_qc['idobj'], c('OBJECTID', 'geometry')) # select only 'idobj' column and change its name to OBJECTID
+aeroports_qc$OBJECTID <- paste0(aeroports_qc$OBJECTID, '_qc')
+aeroports_lb <- aeroports_lb['OBJECTID']
+aeroports_lb$OBJECTID <- paste0(aeroports_lb$OBJECTID, '_lb')
+aeroports <- rbind(aeroports_qc, aeroports_lb)
+
+# roads
+roads_qc <- roads_qc['OBJECTID']
+roads_qc$OBJECTID <- paste0(roads_qc$OBJECTID, '_qc')
+roads_lb <- roads_lb['OBJECTID']
+roads_lb$OBJECTID <- paste0(roads_lb$OBJECTID, '_lb')
+roads <- rbind(roads_qc, roads_lb)
 
 
 ###############################################
