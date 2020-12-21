@@ -109,10 +109,6 @@ roads <- rbind(roads_qc, roads_lb)
 area_lcc_ca <- st_transform(area, projection(land_ca))
 land_ca <- mask(crop(land_ca, area_lcc_ca), area_lcc_ca)
 
-# Reproject
-raster::beginCluster(n = 12) # Parallel if needed
-land_ca <- projectRaster(land_ca, crs=st_crs(land_qc)$proj4string, method = "ngb")
-raster::endCluster()
 
 # From Ontario script (see ON/03-PrepareHexagons_LCC2015_Ontario.R)
 # Removing Snow and ice, water, Urban, and cropland to NA
@@ -162,7 +158,7 @@ land_ca <- reclassify(land_ca, from_to)
 
 # Save rasters/Landcovers
 writeRaster(land_ca, filename = "data/landcover_ca_30m", format = "GTiff")
-writeRaster(land_qc, filename = "data/landcover_qc_30m", format = "GTiff")
+#writeRaster(land_qc, filename = "data/landcover_qc_30m", format = "GTiff")
 
 # Save vector data
 save(area, districts, hexa, roads, trails, aeroports, file = "data/spatialVectors.rda")
