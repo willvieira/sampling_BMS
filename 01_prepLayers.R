@@ -41,7 +41,7 @@ land_ca <- raster("rawLayers/CAN_LC_2015_CAL.tif")
 # Read Lancover Québec
 # See https://www.donneesquebec.ca/recherche/fr/dataset/vegetation-du-nord-quebecois
 # Metadata: https://TinyURL.com/uyvswpb
-land_qc <- st_read("rawLayers/veg_nord_53.gdb", layer = "veg_nord")
+# land_qc <- st_read("rawLayers/veg_nord_53.gdb", layer = "veg_nord")
 
 ######## IMPORT: layers for cost analysis
 
@@ -87,38 +87,38 @@ land_ca <- reclassify(land_ca, from_to)
 
 ##### LCC QUEBEC #####
 
-# Transform land_qc to raster
-# Select habitat type column
-land_qc <- dplyr::select(land_qc, CL_CARTO)
-# Store metadata
-md_co_ter <- data.frame(gov_code = levels(land_qc$CL_CARTO), code = 1:nlevels(land_qc$CL_CARTO))
+# # Transform land_qc to raster
+# # Select habitat type column
+# land_qc <- dplyr::select(land_qc, CL_CARTO)
+# # Store metadata
+# md_co_ter <- data.frame(gov_code = levels(land_qc$CL_CARTO), code = 1:nlevels(land_qc$CL_CARTO))
 
-# Coerce character to integer
-land_qc$CL_CARTO <- as.numeric(land_qc$CL_CARTO)
+# # Coerce character to integer
+# land_qc$CL_CARTO <- as.numeric(land_qc$CL_CARTO)
 
-# Rasterize landcover polygons QC with same resolution than land_ca
-library(fasterize)
-land_qc <- fasterize(land_qc, raster(land_qc, res = 30), field = "CL_CARTO", fun = "first")
+# # Rasterize landcover polygons QC with same resolution than land_ca
+# library(fasterize)
+# land_qc <- fasterize(land_qc, raster(land_qc, res = 30), field = "CL_CARTO", fun = "first")
 
-# Crop land_ca with study area (reduce memory alloc)
-land_qc <- crop(land_qc, area)
+# # Crop land_ca with study area (reduce memory alloc)
+# land_qc <- crop(land_qc, area)
 
-# Removing Snow and ice, water, Urban, and cropland to NA
-# Medatadata classification: see object md_co_ter
-# Prepare new surface code column
-md_co_ter$new_code <- md_co_ter$code
+# # Removing Snow and ice, water, Urban, and cropland to NA
+# # Medatadata classification: see object md_co_ter
+# # Prepare new surface code column
+# md_co_ter$new_code <- md_co_ter$code
 
-# Eau (code: EAU)
-md_co_ter$new_code[which(md_co_ter$gov_code == "EAU")] <- NA
-# Suface neige (Code: NE)
-md_co_ter$new_code[which(md_co_ter$gov_code == "NE")] <- NA
-# Infra humaine (Code: IH)
-md_co_ter$new_code[which(md_co_ter$gov_code == "IH")]  <- NA
-# Ligne de transport �l�c. (Code: LTE)
-md_co_ter$new_code[which(md_co_ter$gov_code == "LTE")]  <- NA
+# # Eau (code: EAU)
+# md_co_ter$new_code[which(md_co_ter$gov_code == "EAU")] <- NA
+# # Suface neige (Code: NE)
+# md_co_ter$new_code[which(md_co_ter$gov_code == "NE")] <- NA
+# # Infra humaine (Code: IH)
+# md_co_ter$new_code[which(md_co_ter$gov_code == "IH")]  <- NA
+# # Ligne de transport �l�c. (Code: LTE)
+# md_co_ter$new_code[which(md_co_ter$gov_code == "LTE")]  <- NA
 
-# Run reclassification on landcover QC
-land_qc <- reclassify(land_qc, matrix(c(md_co_ter$code, md_co_ter$new_code), ncol = 2))
+# # Run reclassification on landcover QC
+# land_qc <- reclassify(land_qc, matrix(c(md_co_ter$code, md_co_ter$new_code), ncol = 2))
 
 
 ###############################################
