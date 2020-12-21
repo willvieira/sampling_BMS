@@ -62,7 +62,13 @@ districts <- st_transform(districts, st_crs(land_ca))
 hexa <- st_transform(hexa, st_crs(land_ca))
 roads <- st_transform(roads, st_crs(land_ca))
 trails <- st_transform(trails, st_crs(land_ca))
-aeroports <- st_transform(aeroports, st_crs(land_ca))
+
+# Filter hexagons for study area (rule: hexagons must have centroid inside study area)
+hexa_cent <- hexa
+hexa_cent$geometry <- hexa %>% sf::st_centroid() %>% sf::st_geometry()
+hexa_cent <- hexa_cent[which(st_intersects(hexa_cent, area, sparse = FALSE)), ]
+hexa <- hexa[which(hexa$ET_Index %in% hexa_cent$ET_Index), ]
+
 
 ###############################################
 # Crop and reclassify landcover (CA & QC) ---------------------------------------------------------
