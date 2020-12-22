@@ -74,7 +74,7 @@ hexa_cent <- hexa_cent[which(st_intersects(hexa_cent, area, sparse = FALSE)), ]
 hexa <- hexa[which(hexa$ET_Index %in% hexa_cent$ET_Index), ]
 
 districts <- st_intersection(districts, area)
-districts <- districts[which(districts$ECOREGION != 97), ] # remove ECOREGION 97 as it is a remnant of ecoregion's edge
+districts <- districts[which(!districts$ECOREGION %in% c(97, 118)), ] # remove unwanted ECOREGIONS as it is a remnant of ecoregion's edge
 
 # We are not croping aeroports as some elements of these layers that
 # are outside study area, but close, may also be used to access sites
