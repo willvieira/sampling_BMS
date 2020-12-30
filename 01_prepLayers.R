@@ -85,6 +85,13 @@ roads_lb <- st_crop(roads_lb, area_expanded)
 trails <- st_crop(trails, area_expanded)
 
 
+####### TRANSFORM: filter aeroports
+## Infrastructure: either 'Aéroport', 'Héliport' or 'Aérodrome'
+## Carburant == 'OUI'
+aeroports_qc <- aeroports_qc[which(aeroports_qc$typeinfras %in% c('Aéroport', 'Héliport', 'Aérodrome')), ]
+aeroports_qc <- aeroports_qc[which(aeroports_qc$carburant == 'OUI'), ]
+
+
 ####### TRANSFORM: Group Quebec and Labrador layers
 # Aeroports (keep only ID in attribute table, and add qc OR lb to id of each aeroport)
 aeroports_qc <- setNames(aeroports_qc['idobj'], c('OBJECTID', 'geometry')) # select only 'idobj' column and change its name to OBJECTID

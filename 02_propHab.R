@@ -124,25 +124,33 @@ for (id in unique(districts$ECOREGION)) {
 
     # Extract habitat values within each hexagons -- FOR CA
     print(glue('Start to extract habitat values for CA'))
-    hab_ca <- foreach(i = seq_len(nrow(hexa_ecoregion)), .packages = "raster") %dopar% {    
-        values_ca <- extract(land_ca, hexa_ecoregion[i, ])[[1]]
-        count_ca <- as.data.frame(table(values_ca))
-        if(nrow(count_ca) > 0)
+    hab_ls <- foreach(i = seq_len(nrow(hexa_ecoregion)), .packages = "raster") %dopar% {    
+        values_hab <- extract(land_ca, hexa_ecoregion[i, ])[[1]]
+        count_hab <- as.data.frame(table(values_hab))
+        if(nrow(count_hab) > 0)
         {
             # save proportion of empty pixels in the hexagonq
-            propNA <- sum(is.na(values_ca))/length(values_ca)
+            propNA <- sum(is.na(values_hab))/length(values_hab)
             # probability of inclusion
-            prev_count_hab <- merge(count_ca, prev_ca_ecoregion, by.x = "values_ca", by.y = "code" , all.x = TRUE)
+            prev_count_hab <- merge(count_hab, prev_ca_ecoregion, by.x = "values_hab", by.y = "code" , all.x = TRUE)
+            # habitat frequency
+            habFreq <- setNames(rep(0, 15), c(1:14, 16))
+            habFreq[as.character(count_hab$values_hab)] <- count_hab$Freq
+
             # return
-            c(propNA, sum(prev_count_hab$Freq * prev_count_hab$incl_prob))
+            c(propNA = propNA,
+              hab_prob = sum(prev_count_hab$Freq * prev_count_hab$incl_prob),
+              setNames(habFreq, paste0('land_ca_', names(habFreq))))
+
         } else {
-            c(NA, NA)
+            rep(NA, 17)
         }
     }
 
-    # Assigning new columns with hab prob and proportion of NA in the hexagon attributes table
-    hexa_ecoregion$hab_ca <- unlist(lapply(hab_ca, `[[`, 2))
-    hexa_ecoregion$propNA <- unlist(lapply(hab_ca, `[[`, 1))
+    # Assign new columns with (i) hab prob, (ii) proportion of NA, and (iii) frequency of habitats
+    # in the hexagon attributes table
+    hab_dt <- do.call(rbind, hab_ls)
+    hexa_ecoregion <- cbind(hexa_ecoregion, hab_dt)
 
     print(glue('Saving'))
 
@@ -180,10 +188,10 @@ for(id in unique(districts$ECOREGION))
     mtext(paste('Ecoregion', id, '-', unique(ecoregion$REGION_NAM)), 3, line = -2, outer = TRUE)
     
     hexa_ecoFilt <- subset(hexa_ecoregion, propNA >= 0.5)
-    xLim <- c(0, max(hexa_ecoregion$hab_ca, na.rm = TRUE))
-    h <- hist(hexa_ecoregion$hab_ca, main = '', ylab = 'Frequency (# of hexagons)', xlab = 'Habitat probability of hexagons', breaks = 30, col = rgb(100, 100, 100, 210, maxColorValue = 255))
+    xLim <- c(0, max(hexa_ecoregion$hab_prob, na.rm = TRUE))
+    h <- hist(hexa_ecoregion$hab_prob, main = '', ylab = 'Frequency (# of hexagons)', xlab = 'Habitat probability of hexagons', breaks = 30, col = rgb(100, 100, 100, 210, maxColorValue = 255))
     par(new = TRUE)
-    hist(hexa_ecoFilt$hab_ca, breaks = h$breaks, xlim = xLim, xlab = '', ylab = '', main = '', xaxt = 'n', yaxt = 'n', col = rgb(116, 169, 255, 140, maxColorValue = 255))
+    hist(hexa_ecoFilt$hab_prob, breaks = h$breaks, xlim = xLim, xlab = '', ylab = '', main = '', xaxt = 'n', yaxt = 'n', col = rgb(116, 169, 255, 140, maxColorValue = 255))
     axis(4, col = rgb(71, 141, 255, maxColorValue = 255), col.axis = rgb(71, 141, 255, maxColorValue = 255))
     mtext('Frequency (hexagons with more than 50% of NA pixels', 4, line = 1, cex = 0.9, col = rgb(71, 141, 255, maxColorValue = 255))
     box()
