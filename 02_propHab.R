@@ -95,7 +95,10 @@ saveRDS(prev_all_ca, 'data/prev_all_ca.RDS')
 # load data calculated above
 prev_all_ca <- readRDS('data/prev_all_ca.RDS')
 
-for (id in unique(districts$ECOREGION)) {
+# Create object with hexagon centroid (it will be used to filter hexagons within an ecoregion)
+hexa_cent <- hexa
+hexa_cent$geometry <- hexa %>% sf::st_centroid() %>% sf::st_geometry()
+
 
     print(glue('Ecoregion {id} -- Process {which(unique(districts$ECOREGION) == id)} on {length(unique(districts$ECOREGION))}'))
     
@@ -103,7 +106,7 @@ for (id in unique(districts$ECOREGION)) {
     ecoregion <- districts[districts$ECOREGION == id, ]
 
     # Select hexagons within the area (st_insersects preserve topology)
-    hexa_ecoregion <- hexa[which(st_intersects(hexa, st_union(ecoregion), sparse = FALSE)), ]
+    hexa_ecoregion <- hexa[which(st_intersects(hexa_cent, st_union(ecoregion), sparse = FALSE)), ]
     
     # Select prevalence for that district
     #prev_qc_ecoregion <- subset(prev_all_qc, ID_ecoregion == id)
