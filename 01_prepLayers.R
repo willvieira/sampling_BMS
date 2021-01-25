@@ -47,7 +47,7 @@ roads_lb <- st_read("rawLayers/Reseau_routier_Labrador_50kW.shp")
 # Read trails 
 trails <- st_read("rawLayers/Motoneiges_Qc_W.shp")
 
-# Read Aeroportsq
+# Read Aeroports
 aeroports_qc <- st_read("rawLayers/Aeroports_Qc_20KW.shp")
 aeroports_lb <- st_read("rawLayers/Aeroport_Labrador_50KW.shp")
 
