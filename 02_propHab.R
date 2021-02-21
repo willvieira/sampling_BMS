@@ -99,7 +99,8 @@ prev_all_ca <- readRDS('data/prev_all_ca.RDS')
 hexa_cent <- hexa
 hexa_cent$geometry <- hexa %>% sf::st_centroid() %>% sf::st_geometry()
 
-
+for (id in unique(districts$ECOREGION))
+{
     print(glue('Ecoregion {id} -- Process {which(unique(districts$ECOREGION) == id)} on {length(unique(districts$ECOREGION))}'))
     
     # Select ecoregion
@@ -198,5 +199,14 @@ for(id in unique(districts$ECOREGION))
     axis(4, col = rgb(71, 141, 255, maxColorValue = 255), col.axis = rgb(71, 141, 255, maxColorValue = 255))
     mtext('Frequency (hexagons with more than 50% of NA pixels', 4, line = 1, cex = 0.9, col = rgb(71, 141, 255, maxColorValue = 255))
     box()
+
+    # par(las = 2)
+    # land_dt <- st_drop_geometry(hexa_ecoregion[, paste0('land_ca_', c(1:14, 16))])
+    # landTotal <- apply(land_dt, 2, sum, na.rm = TRUE)
+    # landPropNA <- apply(land_dt[which(hexa_ecoregion$propNA >= 0.5), ], 2, sum, na.rm = TRUE)
+    # barplot(landTotal, horiz = TRUE)
+    # barplot(landPropNA, add = TRUE, col = rgb(71, 141, 255, maxColorValue = 255), horiz = TRUE)
+    # paste0(round(landPropNA/landTotal * 100, 1), '%')
+
 }
 dev.off()
