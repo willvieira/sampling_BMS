@@ -1,6 +1,6 @@
 ### Title: Preparing spatial layers for analysis
 ### Author: Steve Vissault
-### Last edited by Will Vieira on Dec 17, 2020
+### Last edited by Will Vieira on feb 21, 2020
 
 
 # Import Packages ---------------------------------------------------------
@@ -26,7 +26,7 @@ districts <- read_sf("rawLayers/Ecoregions_Canada_20201209_W.shp")
 
 # Read Hexagons
 # 414163 unique ET_ID
-hexa <- read_sf("rawLayers/Hexagons_w_Attributes.shp")
+hexa <- read_sf("rawLayers/HexagonesCND_SOBQ_W2.shp")
 
 ######## IMPORT: landcover qc & ca
 
@@ -51,6 +51,9 @@ trails <- st_read("rawLayers/Motoneiges_Qc_W.shp")
 aeroports_qc <- st_read("rawLayers/Aeroports_Qc_20KW.shp")
 aeroports_lb <- st_read("rawLayers/Aeroport_Labrador_50KW.shp")
 
+# Read train
+train <- st_read("rawLayers/Trains_TshiuetinQCLAB_W.shp")
+
 
 ####### TRANSFORM: reproject on land_ca
 
@@ -63,6 +66,7 @@ roads_lb <- st_transform(roads_lb, st_crs(land_ca))
 trails <- st_transform(trails, st_crs(land_ca))
 aeroports_qc <- st_transform(aeroports_qc, st_crs(land_ca))
 aeroports_lb <- st_transform(aeroports_lb, st_crs(land_ca))
+train <- st_transform(train, st_crs(land_ca))
 
 
 ####### TRANSFORM: Crop and group on study area
@@ -74,9 +78,9 @@ hexa_cent <- hexa_cent[which(st_intersects(hexa_cent, area, sparse = FALSE)), ]
 hexa <- hexa[which(hexa$ET_Index %in% hexa_cent$ET_Index), ]
 
 districts <- st_intersection(districts, area)
-districts <- districts[which(!districts$ECOREGION %in% c(97, 118)), ] # remove unwanted ECOREGIONS as it is a remnant of ecoregion's edge
+districts <- districts[which(!districts$ECOREGION %in% c(97, 118, 131)), ] # remove unwanted ECOREGIONS as it is a remnant of ecoregion's edge
 
-# We are not croping aeroports as some elements of these layers that
+# We are not croping aeroports and train as some elements of these layers that
 # are outside study area, but close, may also be used to access sites
 # For roads and trails, we will expand (buffer) study area by 10 km to get roads and trails outside but close to the study area
 area_expanded <- st_buffer(area, dist = 10000)
@@ -89,7 +93,12 @@ trails <- st_crop(trails, area_expanded)
 ## Infrastructure: either 'Aéroport', 'Héliport' or 'Aérodrome'
 ## Carburant == 'OUI'
 aeroports_qc <- aeroports_qc[which(aeroports_qc$typeinfras %in% c('Aéroport', 'Héliport', 'Aérodrome')), ]
+# aeroports to keep whatever if carburant is Y or N
+aeroToKeep <- aeroports_qc[which(aeroports_qc$nomexploit %in% c('Hydro-Québec', 'Administration Régionale Kativik')), ]
+# Get all aeroports with carburant
 aeroports_qc <- aeroports_qc[which(aeroports_qc$carburant == 'OUI'), ]
+# add the remaining aerports to keep
+aeroports_qc <- rbind(aeroports_qc, aeroToKeep)
 
 
 ####### TRANSFORM: Group Quebec and Labrador layers
@@ -170,4 +179,4 @@ writeRaster(land_ca, filename = "data/landcover_ca_30m", format = "GTiff")
 #writeRaster(land_qc, filename = "data/landcover_qc_30m", format = "GTiff")
 
 # Save vector data
-save(area, districts, hexa, roads, trails, aeroports, file = "data/spatialVectors.rda")
+save(area, districts, hexa, roads, trails, aeroports, train, file = "data/spatialVectors.rda")
