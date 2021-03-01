@@ -8,6 +8,10 @@ library(raster)
 library(sf)
 library(mapview)
 
+# Parallel computing 
+raster::beginCluster()
+
+
 # Set raster tmp folder
 # rasterOptions(tmpdir = "/data/sviss/tmp")
 
@@ -28,15 +32,16 @@ districts <- read_sf("rawLayers/Ecoregions_Canada_20201209_W.shp")
 # 414163 unique ET_ID
 hexa <- read_sf("rawLayers/HexagonesCND_SOBQ_W2.shp")
 
-######## IMPORT: landcover qc & ca
-
+######## IMPORT: landcover Canada and Canada adapted from land Quebec
 # Read LCC2015: Habitat proportion
 land_ca <- raster("rawLayers/CAN_LC_2015_CAL.tif")
 
-# Read Lancover Québec
-# See https://www.donneesquebec.ca/recherche/fr/dataset/vegetation-du-nord-quebecois
-# Metadata: https://TinyURL.com/uyvswpb
-# land_qc <- st_read("rawLayers/veg_nord_53.gdb", layer = "veg_nord")
+# Read LCC2015 adapted from land_Qc (combined info, needs reclassification using `rawLayers/ClassesVegSOBQ_combineV1Fev2021.csv`)
+land_caqc <- raster("rawLayers/Landcover_Combine.tif")
+
+# Layer defining the limits of land_caqc within Quebec
+limits_caqc <- raster('rawLayers/UT2017_Extent.tif')
+
 
 ######## IMPORT: layers for cost analysis
 
@@ -57,7 +62,7 @@ train <- st_read("rawLayers/Trains_TshiuetinQCLAB_W.shp")
 
 ####### TRANSFORM: reproject on land_ca
 
-# Reproject all spatial layers under land_qc cover projection
+# Reproject all spatial layers under land_ca cover projection
 area <- st_transform(area, st_crs(land_ca))
 districts <- st_transform(districts, st_crs(land_ca))
 hexa <- st_transform(hexa, st_crs(land_ca))
@@ -122,7 +127,7 @@ roads <- rbind(roads_qc, roads_lb)
 
 
 ###############################################
-# Crop and reclassify landcover (CA & QC) ---------------------------------------------------------
+# Crop and reclassify landcover (CA & CAQC) ---------------------------------------------------------
 ###############################################
 
 ##### LCC CANADA #####
@@ -138,49 +143,30 @@ land_ca <- mask(crop(land_ca, area_lcc_ca), area_lcc_ca)
 from_to <- matrix(c(0:19, c(NA, 1:14, NA, 16, rep(NA, 3))), ncol = 2)
 land_ca <- reclassify(land_ca, from_to)
 
-##### LCC QUEBEC #####
 
-# # Transform land_qc to raster
-# # Select habitat type column
-# land_qc <- dplyr::select(land_qc, CL_CARTO)
-# # Store metadata
-# md_co_ter <- data.frame(gov_code = levels(land_qc$CL_CARTO), code = 1:nlevels(land_qc$CL_CARTO))
 
-# # Coerce character to integer
-# land_qc$CL_CARTO <- as.numeric(land_qc$CL_CARTO)
+##### LCC CANADA adapted from QUBEC #####
 
-# # Rasterize landcover polygons QC with same resolution than land_ca
-# library(fasterize)
-# land_qc <- fasterize(land_qc, raster(land_qc, res = 30), field = "CL_CARTO", fun = "first")
+# Mask land_caqc using limits_caqc (everything outside limits_caqc will be NA)
+land_caqc <- overlay(land_caqc, limits_caqc, fun = function(x, y) ifelse(y < 1, NA, x))
 
-# # Crop land_ca with study area (reduce memory alloc)
-# land_qc <- crop(land_qc, area)
-
-# # Removing Snow and ice, water, Urban, and cropland to NA
-# # Medatadata classification: see object md_co_ter
-# # Prepare new surface code column
-# md_co_ter$new_code <- md_co_ter$code
-
-# # Eau (code: EAU)
-# md_co_ter$new_code[which(md_co_ter$gov_code == "EAU")] <- NA
-# # Suface neige (Code: NE)
-# md_co_ter$new_code[which(md_co_ter$gov_code == "NE")] <- NA
-# # Infra humaine (Code: IH)
-# md_co_ter$new_code[which(md_co_ter$gov_code == "IH")]  <- NA
-# # Ligne de transport �l�c. (Code: LTE)
-# md_co_ter$new_code[which(md_co_ter$gov_code == "LTE")]  <- NA
-
-# # Run reclassification on landcover QC
-# land_qc <- reclassify(land_qc, matrix(c(md_co_ter$code, md_co_ter$new_code), ncol = 2))
+# Load classes from combine file which combines canada and quebec information
+classVegSOBQ <- read.csv("rawLayers/ClassesVegSOBQ_combineV1Fev2021.csv")
+# Removing Snow and ice, water, Urban, and cropland to NA
+classVegSOBQ$ClassesSOBQVEG_V1_Fev2021[which(classVegSOBQ$ClassesSOBQVEG_V1_Fev2021 %in% c(0, 15, 17, 18, 19))] <- NA
+# Transform into a matrix
+from_to <- as.matrix(classVegSOBQ[, 2:3])
+# Reclassify
+land_caqc <- reclassify(land_caqc, from_to)
 
 
 ###############################################
-# Save clean spatial layers in Data ---------------------------------------------------------
+# Save clean spatial layers in Data -----`----------------------------------------------------
 ###############################################
 
 # Save rasters/Landcovers
 writeRaster(land_ca, filename = "data/landcover_ca_30m", format = "GTiff")
-#writeRaster(land_qc, filename = "data/landcover_qc_30m", format = "GTiff")
+writeRaster(land_caqc, filename = "data/landcover_caqc_30m", format = "GTiff")
 
 # Save vector data
 save(area, districts, hexa, roads, trails, aeroports, train, file = "data/spatialVectors.rda")
