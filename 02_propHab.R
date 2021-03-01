@@ -10,11 +10,11 @@ library(sf)
 library(glue)
 library(stringr)
 library(doParallel)
-doParallel::registerDoParallel(parallel::detectCores() - 2)
+doParallel::registerDoParallel(parallel::detectCores() - 1)
 
 load("data/spatialVectors.rda")
 land_ca <- raster("data/landcover_ca_30m.tif")
-#land_qc <- raster("data/landcover_qc_30m.tif")
+land_caqc <- raster("data/landcover_caqc_30m.tif")
 
 
 
@@ -48,25 +48,31 @@ prevalence_hab <- function(ecoregion, landcover)
 # Using land Canada
 ###########################
 
-# Same as above but in parallel
-prev_ca_by_ecoregion <- foreach(i = unique(districts$ECOREGION), .packages = "raster") %dopar% {
+# Calculate habitat prevalence for each ecoregion in parallel
+# Using two different habitat layers depending on the ecoregion
+
+# Ecoregions to use land_ca (using land_ca because there is no information from land_caqc available)
+eco_land_ca <- c(28, 30, 46, 48, 49, 78, 86, 216)
+eco_land_caqc <- setdiff(unique(districts$ECOREGION), eco_land_ca)
+
+prev_ca_by_ecoregion <- foreach(i = eco_land_ca, .packages = "raster") %dopar% {
     try(prevalence_hab(ecoregion = subset(districts, ECOREGION == i), landcover = land_ca))
 }
 
+# Adjust crs to the match with land_caqc
+districts_caqc <- sf::st_transform(districts, sf::st_crs(land_caqc))
 
-# # Using land Quebec
-###########################
-
-# prev_qc_by_ecoregion <- foreach(i = unique(districts$ECOREGION), .packages = "raster") %dopar% {
-#     try(prevalence_hab(ecoregion = subset(districts, ECOREGION == i), landcover = land_qc))
-# }
+prev_caqc_by_ecoregion <- foreach(i = eco_land_caqc, .packages = "raster") %dopar% {
+    try(prevalence_hab(ecoregion = subset(districts_caqc, ECOREGION == i), landcover = land_caqc))
+}
 
 
 ####### Save prevalence by district
-prev_all_ca <- do.call(rbind, prev_ca_by_ecoregion[which(sapply(prev_ca_by_ecoregion, class) == "data.frame")])
-saveRDS(prev_all_ca, 'data/prev_all_ca.RDS')
-#prev_all_qc <- do.call(rbind, prev_qc_by_ecoregion[which(sapply(prev_qc_by_ecoregion, class) == "data.frame")])
-#saveRDS(prev_all_qc, 'data/prev_all_qc.RDS')
+prev_all <- do.call(rbind, c(
+                    prev_ca_by_ecoregion[which(sapply(prev_ca_by_ecoregion, class) == "data.frame")],
+                    prev_caqc_by_ecoregion[which(sapply(prev_caqc_by_ecoregion, class) == "data.frame")]))
+
+saveRDS(prev_all, 'data/prev_all.RDS')
 
 
 # # viz how probability vary in function of # of veg type (code) and its frequence
@@ -79,10 +85,10 @@ saveRDS(prev_all_ca, 'data/prev_all_ca.RDS')
 # points(prev_all_qc$code, prev_all_qc$freq, cex = 0.5, pch = 19, col = rgb(0, 0, 0, 0.6))
 # # ca
 # nbCode <- seq(6, 11)
-# freqCode <- seq(min(prev_all_ca$freq), quantile(prev_all_ca$freq, .75), by = 2000)
+# freqCode <- seq(min(prev_all$freq), quantile(prev_all$freq, .75), by = 2000)
 # z <- outer(nbCode, freqCode, function(nbCode, freqCode) 1/nbCode/freqCode)
 # fields::image.plot(nbCode, freqCode, z, xlab = 'Vegetation type', ylab = '')
-# points(prev_all_ca$code, prev_all_ca$freq, cex = 0.5, pch = 19, col = rgb(0, 0, 0, 0.6))
+# points(prev_all$code, prev_all$freq, cex = 0.5, pch = 19, col = rgb(0, 0, 0, 0.6))
 
 
 
@@ -92,12 +98,20 @@ saveRDS(prev_all_ca, 'data/prev_all_ca.RDS')
 # Get sum of habitat probability for each hexagon using habitat prevalence from the ecoregion
 ###############################################
 
-# load data calculated above
-prev_all_ca <- readRDS('data/prev_all_ca.RDS')
 
 # Create object with hexagon centroid (it will be used to filter hexagons within an ecoregion)
 hexa_cent <- hexa
-hexa_cent$geometry <- hexa %>% sf::st_centroid() %>% sf::st_geometry()
+hexa_cent$geometry <- hexa_cent %>%
+                        sf::st_centroid() %>%
+                        sf::st_geometry() %>%
+                        sf::st_transform(st_crs(districts))
+
+# Temporary hexa with crs ajusted to match land_caqc
+hexa_caqc <- hexa %>%
+                sf::st_transform(crs(land_caqc))
+
+# Get habitat codes
+habCodes <- sort(as.numeric(levels(prev_all$code)))
 
 for (id in unique(districts$ECOREGION))
 {
@@ -106,49 +120,68 @@ for (id in unique(districts$ECOREGION))
     # Select ecoregion
     ecoregion <- districts[districts$ECOREGION == id, ]
 
-    # Select hexagons within the area (st_insersects preserve topology)
-    hexa_ecoregion <- hexa[which(st_intersects(hexa_cent, st_union(ecoregion), sparse = FALSE)), ]
-    
     # Select prevalence for that district
     #prev_qc_ecoregion <- subset(prev_all_qc, ID_ecoregion == id)
-    prev_ca_ecoregion <- subset(prev_all_ca, ID_ecoregion == id)
+    prev_all_ecoregion <- subset(prev_all, ID_ecoregion == id)
 
-    # Extract habitat values within each hexagons -- FOR QC
-    #print(glue('Start to extract habitat values for QC'))
+    # Select hexagons within the ecoregion (st_insersects preserve topology)
+    hexaPos <- which(st_intersects(hexa_cent, st_union(ecoregion), sparse = FALSE))
+    hexa_ecoregion <- hexa[hexaPos, ]
+    hexa_ecoregion_caqc <- hexa_caqc[hexaPos, ]
 
-    #hab_qc <- foreach(i = seq_len(nrow(hexa_ecoregion)), .packages = "raster", .combine = c) %dopar% {    
-    #    count_qc <- as.data.frame(table(raster::extract(land_qc, hexa_ecoregion[i, ])))
-    #    if(nrow(count_qc) > 0){
-    #        prev_count_hab <- merge(count_qc, prev_qc_ecoregion, by.x = "Var1", by.y = "code" , all.x = TRUE)
-    #        sum(prev_count_hab$Freq * prev_count_hab$incl_prob)
-    #    } else {
-    #        NA
-    #    }
-    #}
-
-    # Extract habitat values within each hexagons -- FOR CA
+    # Extract habitat values within each hexagons
     print(glue('Start to extract habitat values for CA'))
-    hab_ls <- foreach(i = seq_len(nrow(hexa_ecoregion)), .packages = "raster") %dopar% {    
-        values_hab <- extract(land_ca, hexa_ecoregion[i, ])[[1]]
-        count_hab <- as.data.frame(table(values_hab))
-        if(nrow(count_hab) > 0)
-        {
-            # save proportion of empty pixels in the hexagonq
-            propNA <- sum(is.na(values_hab))/length(values_hab)
-            # probability of inclusion
-            prev_count_hab <- merge(count_hab, prev_ca_ecoregion, by.x = "values_hab", by.y = "code" , all.x = TRUE)
-            # habitat frequency
-            habFreq <- setNames(rep(0, 15), c(1:14, 16))
-            habFreq[as.character(count_hab$values_hab)] <- count_hab$Freq
 
-            # return
-            c(propNA = propNA,
-              hab_prob = sum(prev_count_hab$Freq * prev_count_hab$incl_prob),
-              setNames(habFreq, paste0('land_ca_', names(habFreq))))
+    if(id %in% eco_land_ca)
+    {        
+        hab_ls <- foreach(i = seq_len(nrow(hexa_ecoregion)), .packages = "raster") %dopar% {    
+            values_hab <- raster::extract(land_ca, hexa_ecoregion[i, ])[[1]]
+            count_hab <- as.data.frame(table(values_hab))
+            if(nrow(count_hab) > 0)
+            {
+                # save proportion of empty pixels in the hexagonq
+                propNA <- sum(is.na(values_hab))/length(values_hab)
+                # probability of inclusion
+                prev_count_hab <- merge(count_hab, prev_all_ecoregion, by.x = "values_hab", by.y = "code" , all.x = TRUE)
+                # habitat frequency
+                habFreq <- setNames(rep(0, length(habCodes)), habCodes)
+                habFreq[as.character(count_hab$values_hab)] <- count_hab$Freq
 
-        } else {
-            rep(NA, 17)
+                # return
+                c(propNA = propNA,
+                hab_prob = sum(prev_count_hab$Freq * prev_count_hab$incl_prob),
+                setNames(habFreq, paste0('land_ca_', names(habFreq))))
+
+            } else {
+                rep(NA, 23)
+            }
         }
+    }else if(id %in% eco_land_caqc)
+    {
+        hab_ls <- foreach(i = seq_len(nrow(hexa_ecoregion_caqc)), .packages = "raster") %dopar% {    
+            values_hab <- raster::extract(land_caqc, hexa_ecoregion_caqc[i, ])[[1]]
+            count_hab <- as.data.frame(table(values_hab))
+            if(nrow(count_hab) > 0)
+            {
+                # save proportion of empty pixels in the hexagonq
+                propNA <- sum(is.na(values_hab))/length(values_hab)
+                # probability of inclusion
+                prev_count_hab <- merge(count_hab, prev_all_ecoregion, by.x = "values_hab", by.y = "code" , all.x = TRUE)
+                # habitat frequency
+                habFreq <- setNames(rep(0, length(habCodes)), habCodes)
+                habFreq[as.character(count_hab$values_hab)] <- count_hab$Freq
+
+                # return
+                c(propNA = propNA,
+                hab_prob = sum(prev_count_hab$Freq * prev_count_hab$incl_prob),
+                setNames(habFreq, paste0('land_ca_', names(habFreq))))
+
+            } else {
+                rep(NA, 23)
+            }
+        }
+    }else{
+        warning('Ecoregion ', id, ' was not found in either `eco_land_ca` nor `eco_land_caqc. Skipping...`')
     }
 
     # Assign new columns with (i) hab prob, (ii) proportion of NA, and (iii) frequency of habitats
