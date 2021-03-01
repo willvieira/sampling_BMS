@@ -246,8 +246,7 @@ for (id in unique(districts$ECOREGION))
     hexa_ecoregion$costSum <- unlist(costSum)
 
     # Calculate the root squared of inversed cost to get a probabilistic value
-    inv_sqrt <- 1 / (sqrt(unlist(costSum)))
-    hexa_ecoregion$costProb <- inv_sqrt / sum(inv_sqrt)
+    hexa_ecoregion$cost_prob <-  1 / (sqrt(unlist(costSum)))
     
     print('Saving')
 
