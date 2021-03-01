@@ -4,11 +4,11 @@
 
 # Libraries
 library(sf)
-library(mapview)
 library(raster)
+library(mapview)
 library(fasterize)
 library(doParallel)
-doParallel::registerDoParallel(parallel::detectCores() - 2)
+doParallel::registerDoParallel(parallel::detectCores() - 1)
 
 
 # Load spatial vectors
@@ -100,12 +100,30 @@ rm(atv_buff, atv_buff_r, trails)
 # Get centroid of hexagons
 # Helicoter cost is calculated once for the whole hexagon based on its centroid (not pixel based)
 hexa_hel <- hexa
-hexa_hel$geometry <- hexa %>% sf::st_centroid() %>% sf::st_geometry()
+hexa_hel$geometry <- hexa %>%
+                      sf::st_centroid() %>%
+                      sf::st_geometry() %>%
+                      sf::st_transform(sf::st_crs(aeroports))
 
-# Fix projection and calculate matrix of distance between centroid and aeroports
-aeroports <- sf::st_transform(aeroports, sf::st_crs(hexa_hel))
+# Train rail is used as a source of fuel (no need to double travel and basecamp, so they are considered as aerports)
+# Get train rail in which is inside buffer of X km around aeroport (X is max distance helicopter can fly)
+aeroports_bf <- sf::st_buffer(aeroports, dist = params$helicopter_max_km_from_base * 1000)
+
+# select all hexagons in which cetroid is inside this buffer
+train_closeAeroport <- sf::st_intersection(train, aeroports_bf)
+
+# Calculate matrix of distance between centroid and aeroports
 mat_dist <- sf::st_distance(x = hexa_hel, y = aeroports)
 hexa_hel$aeroportDist <- apply(mat_dist, 1, min)
+
+# Same as above but for the train rail
+mat_dist <- sf::st_distance(x = hexa_hel, y = train_closeAeroport)
+hexa_hel$trainDist <- apply(mat_dist, 1, min)
+
+# minimum distance between aeroports and train
+hexa_hel$aeroportDist <- pmin(hexa_hel$aeroportDist, hexa_hel$trainDist)
+hexa_hel <- hexa_hel[, !(names(hexa_hel) %in% 'trainDist')]
+
 
 # Add cost depending on distance (meters)
 heliCost <- function(distance, pars)
@@ -193,9 +211,8 @@ saveRDS(hexa_hel, 'data/hexa_hel_cost.RDS')
 cost_min <- raster::raster('data/min_cost.tif')
 hexa_hel <- readRDS('data/hexa_hel_cost.RDS')
 
-
-for (id in unique(districts$ECOREGION)) {
-
+for (id in unique(districts$ECOREGION))
+{
     cat('Ecoregion', id, '-- Process', which(unique(districts$ECOREGION) == id), 'on', length(unique(districts$ECOREGION)), '\n')
     
     # Select ecoregion
@@ -209,7 +226,6 @@ for (id in unique(districts$ECOREGION)) {
     costMin_ecoregion <- mask(crop(cost_min, as(hexa_ecoregion, "Spatial")), as(hexa_ecoregion, "Spatial"))
     
     # Extract habitat values within each hexagons -- FOR CA
-    print('Start to extract habitat values for each hexagon')
     costSum <- foreach(i = seq_len(nrow(hexa_ecoregion)), .packages = "raster") %dopar% {    
       hexValues <- raster::extract(costMin_ecoregion, hexa_ecoregion[i, ])
       costTab <- table(hexValues[[1]])
@@ -232,7 +248,7 @@ for (id in unique(districts$ECOREGION)) {
     # Calculate the root squared of inversed cost to get a probabilistic value
     inv_sqrt <- 1 / (sqrt(unlist(costSum)))
     hexa_ecoregion$costProb <- inv_sqrt / sum(inv_sqrt)
-
+    
     print('Saving')
 
     # Writing results in corresponding folder
@@ -241,24 +257,6 @@ for (id in unique(districts$ECOREGION)) {
 
 stopImplicitCluster()
 
-
-
-
-#####################################################################
-# Print hexagon cost
-#####################################################################
-
-eco_missingHexa <- c(7, 28, 47, 48, 46, 31, 30, 131)
-
-# load shapefiles into a list
-cost_ls <- list()
-for (id in setdiff(unique(districts$ECOREGION), eco_missingHexa))
-  cost_ls[[as.character(id)]] <- sf::st_read(paste0('output/', tolower(gsub(' ', '_', unique(subset(districts, ECOREGION == id)$REGION_NAM))), '_', id, '/hexa_cost.shp'), quiet = TRUE)
-
-# rbind all shapefiles into one sf oject
-cost_bind <- do.call(rbind, cost_ls)
-
-sf::write_sf(cost_bind, 'cost_Ontario.shp')
 
 
 
