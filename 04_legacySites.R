@@ -1,0 +1,46 @@
+########################################################################
+### Legacy sites
+### Author: Will Vieira
+### February 28, 2021
+########################################################################
+
+
+library(tidyverse)
+library(sf)
+
+
+########################################################################
+# Steps
+#   - Load spatial data and legacy site points
+#   - Filter legacy sites points that can be used
+#   - Count number of points by hexagon
+########################################################################
+
+
+# load all info
+load('data/spatialVectors.rda')
+legacy_sites <- sf::st_read('rawLayers/Registre_LegacyV1_W4.shp') %>%
+                sf::st_transform(sf::st_crs(hexa))
+
+
+
+# Filter points for BMS
+legacy_sites <- subset(legacy_sites, BMS == 'OUI')
+
+
+# Count legacy_sites per hexagon for each ecoregion
+for(id in unique(districts$ECOREGION))
+{
+    # load hexagons
+    hexa_ecoregion <- sf::st_read(paste0('output/', tolower(gsub(' ', '_', unique(subset(districts, ECOREGION == id)$REGION_NAM))), '_', id, '/hexa_cost.shp'), quiet = TRUE)
+    
+    # count number of lagacy site points
+    hexa_ecoregion$legacySite <- lengths(sf::st_intersects(hexa_ecoregion, legacy_sites))
+
+    # save as new shapefile
+    sf::write_sf(hexa_ecoregion,
+                 paste0('output/',
+                        tolower(gsub(' ', '_', unique(subset(districts, ECOREGION == id)$REGION_NAM))),
+                        '_', id, '/hexa_', id, '.shp'))
+
+}
