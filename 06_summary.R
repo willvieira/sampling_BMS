@@ -128,9 +128,3 @@ for(id in sort(unique(districts$ECOREGION)))
     }
 }
 dev.off()
-
-
-# TODO: calculer aussi (simulations) combien de points d'ecoute necessaires (16, 15, 14, 13, ...) pour remplir le besoin d'hexagones necessaires (region sud)
-
-
-
