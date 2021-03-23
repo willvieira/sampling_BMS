@@ -20,6 +20,9 @@
 
 
 library(sf)
+library(spatstat)
+library(tidyverse)
+library(viridis)
 load('data/spatialVectors.rda')
 
 
@@ -65,14 +68,14 @@ habitat_colors <- c(land_ca_1 = rgb(0, 61, 0, maxColorValue = 255),
 
 
 
-pdf('summary_by_ecoregion2.pdf', width = 8, height = 9)
+pdf('summary_by_ecoregion.pdf', width = 8, height = 9)
 for(id in sort(unique(districts$ECOREGION)))
 {
     # Select hexagons from ecoregion
     hexa_ecoregion <- subset(hexas, ecoregion == id)
 
     # start plot
-    par(mfrow = c(3, 2), mar = c(2.5, 2.5, 1, 3.5), oma = c(0, 0, 1, 0), mgp = c(1.4, 0.2, 0), tck = -.008)
+    par(mfrow = c(4, 2), mar = c(2.5, 2.5, 1, 3.5), oma = c(0, 0, 1, 0), mgp = c(1.4, 0.2, 0), tck = -.008)
     
 
     # Proportion of habitat classes
@@ -122,15 +125,49 @@ for(id in sort(unique(districts$ECOREGION)))
       # remove hexagons with zero legacy sites
       legacySites <- hexa_ecoregion$legacySite[hexa_ecoregion$legacySite != 0]
       # Define xlim and histogram breaks
-      maxLegacySite <- max(legacySites)
-      if(maxLegacySite  > 4) {
-        breaks <- seq(1, maxLegacySite, by = 1)
+      rangeLegacySites <- range(legacySites)
+      if(rangeLegacySites[2] > 1) {
+        breaks <- seq(1, rangeLegacySites[2], by = 1)
       }else{
-        breaks <- seq(1, 4, 1)
+        breaks <- seq(1, 2, 1)
       }
+
+      # Color depending on the number of legacy Sites
+      colLegacySite <- setNames(viridis_pal()(rangeLegacySites[2]), seq(rangeLegacySites[1], rangeLegacySites[2]))
       
-      hist(legacySites, main = '', ylab = 'Frequence (# de hexagones)', xlab = "Nombre de station d'ecoute dans l'hexagone", col = 'grey', breaks = breaks)
+      hist(legacySites, main = '', ylab = 'Frequence (# de hexagones)', xlab = "Nombre de station d'ecoute dans l'hexagone", col = colLegacySite[-1], breaks = breaks)
     }else{
+      plot(0, pch = '', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '', bty = 'n')
+      text(1, 0, "Pas de station d'ecoute dans cette écorégion")
+    }
+
+    # Spatial aggregation of legacy sites
+    if(any(hexa_ecoregion$legacySite > 0))
+    {
+      # Get Window (ecoregion's boundary)
+      owinWindow_eco <- as.owin(sf::st_union(hexa_ecoregion))
+
+      coords <- hexa_ecoregion %>%
+                      filter(legacySite > 0) %>%
+                      sf::st_centroid() %>%
+                      sf::st_coordinates() %>%
+                      as.data.frame()
+
+      rangeLegacySites <- range(subset(hexa_ecoregion, legacySite > 0)$legacySite)
+      
+      # Transform in a point pattern obj
+      sample_ppp <- ppp(x = coords$X, y = coords$Y, window = owinWindow_eco)
+      
+      # plot rippley's K
+      plot(Kest(sample_ppp, correction = "iso"), main = '', , ylab = "Ripley's K stations d'ecoute")    
+      
+      # plot polygon and legacy sites
+      plot(owinWindow_eco, main = '')
+      points(coords$X, coords$Y, cex = 0.3, pch = 19, col = colLegacySite[legacySites])
+
+    }else{
+      plot(0, pch = '', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '', bty = 'n')
+      text(1, 0, "Pas de station d'ecoute dans cette écorégion")
       plot(0, pch = '', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '', bty = 'n')
       text(1, 0, "Pas de station d'ecoute dans cette écorégion")
     }
