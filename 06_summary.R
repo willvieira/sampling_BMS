@@ -62,7 +62,7 @@ habitat_colors <- c(land_ca_1 = rgb(0, 61, 0, maxColorValue = 255),
                     land_ca_28 = '#ade8f4',
                     land_ca_29 = '#caf0f8',
                     land_ca_30 = '#E6FFFF')
-)
+
 
 
 pdf('summary_by_ecoregion2.pdf', width = 8, height = 9)
@@ -121,7 +121,15 @@ for(id in sort(unique(districts$ECOREGION)))
     {
       # remove hexagons with zero legacy sites
       legacySites <- hexa_ecoregion$legacySite[hexa_ecoregion$legacySite != 0]
-      hist(legacySites, main = '', ylab = 'Frequence (# de hexagones)', xlab = "Nombre de station d'ecoute dans l'hexagone", col = 'grey')
+      # Define xlim and histogram breaks
+      maxLegacySite <- max(legacySites)
+      if(maxLegacySite  > 4) {
+        breaks <- seq(1, maxLegacySite, by = 1)
+      }else{
+        breaks <- seq(1, 4, 1)
+      }
+      
+      hist(legacySites, main = '', ylab = 'Frequence (# de hexagones)', xlab = "Nombre de station d'ecoute dans l'hexagone", col = 'grey', breaks = breaks)
     }else{
       plot(0, pch = '', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '', bty = 'n')
       text(1, 0, "Pas de station d'ecoute dans cette écorégion")
