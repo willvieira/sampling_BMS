@@ -68,15 +68,14 @@ habitat_colors <- c(land_ca_1 = rgb(0, 61, 0, maxColorValue = 255),
 
 
 
-pdf('summary_by_ecoregion.pdf', width = 8, height = 9)
+pdf('summary_by_ecoregion.pdf', width = 8, height = 15)
 for(id in sort(unique(districts$ECOREGION)))
 {
     # Select hexagons from ecoregion
     hexa_ecoregion <- subset(hexas, ecoregion == id)
 
     # start plot
-    par(mfrow = c(4, 2), mar = c(2.5, 2.5, 1, 3.5), oma = c(0, 0, 1, 0), mgp = c(1.4, 0.2, 0), tck = -.008)
-    
+    par(mfrow = c(5, 2), mar = c(2.5, 2.5, 2, 3.5), oma = c(0, 0, 1, 0), mgp = c(1.4, 0.2, 0), tck = -.008)
 
     # Proportion of habitat classes
     land_dt <- st_drop_geometry(hexa_ecoregion[, paste0('land_ca_', c(1:2, 5:6, 8, 10:14, 16, 21:30))])
@@ -146,7 +145,8 @@ for(id in sort(unique(districts$ECOREGION)))
     {
       # Get Window (ecoregion's boundary)
       owinWindow_eco <- as.owin(sf::st_union(hexa_ecoregion))
-
+      
+      # All hexagons with at least 1 legacy site
       coords <- hexa_ecoregion %>%
                       filter(legacySite > 0) %>%
                       sf::st_centroid() %>%
@@ -159,13 +159,40 @@ for(id in sort(unique(districts$ECOREGION)))
       sample_ppp <- ppp(x = coords$X, y = coords$Y, window = owinWindow_eco)
       
       # plot rippley's K
-      plot(Kest(sample_ppp, correction = "iso"), main = '', , ylab = "Ripley's K stations d'ecoute")    
+      plot(Kest(sample_ppp, correction = "iso"), main = '', , ylab = "Ripley's K stations d'ecoute", bty = 'l')    
       
       # plot polygon and legacy sites
       plot(owinWindow_eco, main = '')
       points(coords$X, coords$Y, cex = 0.3, pch = 19, col = colLegacySite[legacySites])
+      mtext("Hexagones avec au moins une station d'ecoute", 3, line = -69, outer = TRUE, cex = 0.7)
+
+      # All hexagons with >= 4 hexagons
+      coords <- hexa_ecoregion %>%
+                      filter(legacySite >= 4) %>%
+                      sf::st_centroid() %>%
+                      sf::st_coordinates() %>%
+                      as.data.frame()
+
+      rangeLegacySites <- range(subset(hexa_ecoregion, legacySite >= 4)$legacySite)
+      
+      # Transform in a point pattern obj
+      sample_ppp <- ppp(x = coords$X, y = coords$Y, window = owinWindow_eco)
+      
+      legacySites <- hexa_ecoregion$legacySite[hexa_ecoregion$legacySite >= 4]
+
+      # plot rippley's K
+      plot(Kest(sample_ppp, correction = "iso"), main = '', , ylab = "Ripley's K stations d'ecoute", bty = 'l')    
+      
+      # plot polygon and legacy sites
+      plot(owinWindow_eco, main = '')
+      points(coords$X, coords$Y, cex = 0.3, pch = 19, col = colLegacySite[legacySites])
+      mtext("Hexagones avec au moins quatre station d'ecoute", 3, line = -92, outer = TRUE, cex = 0.7)
 
     }else{
+      plot(0, pch = '', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '', bty = 'n')
+      text(1, 0, "Pas de station d'ecoute dans cette écorégion")
+      plot(0, pch = '', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '', bty = 'n')
+      text(1, 0, "Pas de station d'ecoute dans cette écorégion")
       plot(0, pch = '', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '', bty = 'n')
       text(1, 0, "Pas de station d'ecoute dans cette écorégion")
       plot(0, pch = '', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '', bty = 'n')
