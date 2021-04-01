@@ -30,10 +30,10 @@ load('data/spatialVectors.rda')
 #####################################################################
 
 hexa_ls <- list()
-for (id in unique(districts$ECOREGION))
+for (id in ecoregions)
 {
-  hexa_ls[[as.character(id)]] <- sf::st_read(paste0('output/', tolower(gsub(' ', '_', unique(subset(districts, ECOREGION == id)$REGION_NAM))), '_', id, '/hexa_', id, '.shp'), quiet = TRUE)
-  hexa_ls[[as.character(id)]]$ecoregion <- id
+  hexa_ls[[id]] <- sf::st_read(paste0('output/', names(ecoregions[ecoregions == id]), '_', id, '/hexa_', id, '.shp'), quiet = TRUE)
+  hexa_ls[[id]]$ecoregion <- id
 }
 
 # rbind all shapefiles into one sf oject
@@ -69,7 +69,7 @@ habitat_colors <- c(land_ca_1 = rgb(0, 61, 0, maxColorValue = 255),
 
 
 pdf('summary_by_ecoregion.pdf', width = 8, height = 15)
-for(id in sort(unique(districts$ECOREGION)))
+for(id in ecoregions)
 {
     # Select hexagons from ecoregion
     hexa_ecoregion <- subset(hexas, ecoregion == id)
@@ -99,7 +99,7 @@ for(id in sort(unique(districts$ECOREGION)))
     legend(4, 1, legend = paste0('land_', c(1:2, 5:6, 8, 10:14, 16, 21:30)), lty = 2, lwd = 5, col = habitat_colors, bty = 'n', cex = 0.8)
 
     # print ecoregion id
-    mtext(paste('Écorégion', id, '-', unique(subset(districts, ECOREGION == id)$REGION_NAM)), 3, line = -0.5, outer = TRUE, cex = 0.75)
+    mtext(paste('Écorégion', id, '-', gsub('_', ' ', names(ecoregions[ecoregions == id]))), 3, line = -0.5, outer = TRUE, cex = 0.75)
     
     # histogram for habitat probability
     xLim <- range(hexa_ecoregion$hab_prob, na.rm = TRUE)
@@ -200,3 +200,249 @@ for(id in sort(unique(districts$ECOREGION)))
     }
 }
 dev.off()
+
+
+
+# Print Ripley's K for all ecoregions
+######################################################
+
+# Get largest ecoregion
+    sampleSize <- readRDS('data/nbHexa_ecoregion.RDS')
+
+    # Sample 2% of hexagons available hexagons
+    sampleSize$N2 <- sampleSize$hexagonProp80 * 0.02
+    
+    # Sample size in function of size proportion between ecoregions
+    sampleSize$N <- unclass(round(sum(sampleSize$N2) * sampleSize$sizeProp, 0))
+    
+    # Total sample size
+    N <- sum(sampleSize$N)
+
+    large_eco <- sampleSize$ecoregion[which.max(sampleSize$N)]
+#
+ 
+# Prepare Ripley's K data
+ripley <- data.frame()
+for(id in ecoregions)
+{
+    # Select hexagons from ecoregion
+    hexa_ecoregion <- subset(hexas, ecoregion == id)
+
+    if(any(hexa_ecoregion$legacySite > 1))
+    {
+      # Get Window (ecoregion's boundary)
+      owinWindow_eco <- as.owin(sf::st_union(hexa_ecoregion))
+      
+      # All hexagons with at least 1 legacy site
+      coords <- hexa_ecoregion %>%
+                      filter(legacySite > 0) %>%
+                      sf::st_centroid() %>%
+                      sf::st_coordinates() %>%
+                      as.data.frame()
+      
+      # Transform in a point pattern obj
+      sample_ppp <- ppp(x = coords$X, y = coords$Y, window = owinWindow_eco)
+      
+      # plot rippley's K
+      RipleyK <- as.data.frame(Kest(sample_ppp, correction = "iso"))
+
+      # Append to data.frame
+      RipleyK$ecoregion <- id
+      RipleyK$legacy <- 0
+      ripley <- rbind(ripley, RipleyK)
+    }
+
+    if(any(hexa_ecoregion$legacySite >= 4))
+    {
+      # Get Window (ecoregion's boundary)
+      owinWindow_eco <- as.owin(sf::st_union(hexa_ecoregion))
+      
+      # All hexagons with at least 1 legacy site
+      coords <- hexa_ecoregion %>%
+                      filter(legacySite >= 4) %>%
+                      sf::st_centroid() %>%
+                      sf::st_coordinates() %>%
+                      as.data.frame()
+      
+      # Transform in a point pattern obj
+      sample_ppp <- ppp(x = coords$X, y = coords$Y, window = owinWindow_eco)
+      
+      # plot rippley's K
+      RipleyK <- as.data.frame(Kest(sample_ppp, correction = "iso"))
+
+      # Append to data.frame
+      RipleyK$ecoregion <- as.factor(id)
+      RipleyK$legacy <- as.factor(4)
+      ripley <- rbind(ripley, RipleyK)
+
+    }
+
+    cat(' Ecoregion', which(id == ecoregions), 'of', length(ecoregions), '\r')
+}
+
+
+# GRTS output from the largest ecoregion as as a reference line
+
+  Stratdsgn <- setNames(list(
+                            list(panel = c(PanelOne = subset(sampleSize, ecoregion == large_eco)$N), over = 0, seltype = "Continuous")
+                            ),
+                        paste0('eco_', large_eco)) 
+
+  hexas <- subset(hexas, propNA <= 0.8)
+  hexas$p <- (hexas$hab_prob * hexas$cost_prob) / sum(hexas$hab_prob * hexas$cost_prob)
+  hexas <- subset(hexas, p != 0)
+
+  sample_frame <- subset(hexas, ecoregion %in% large_eco)
+
+  # Get x and y from centroid of hexagon
+  sample_frame$geometry <- sample_frame %>% sf::st_centroid() %>% sf::st_geometry()
+  sample_frame[c('X', 'Y')] <- sf::st_coordinates(sample_frame)
+    
+  # rename ecoregion name to match design name
+  sample_frame$eco_name <- paste0('eco_', sample_frame$ecoregion)
+
+  # Get only attributes table (remove spatial information)
+  attframe <- sf::st_drop_geometry(sample_frame)
+
+  # Standard p
+  attframe$mdcaty <- sum(subset(sampleSize, ecoregion %in% c(101, 103, 78))$N) * attframe$p/sum(attframe$p)
+  
+  # Run GRTS
+  out <- spsurvey::grts(design = Stratdsgn,
+                        DesignID = "ET_ID",
+                        type.frame = "finite",
+                        src.frame = "att.frame",
+                        att.frame = attframe,
+                        xcoord = 'X',
+                        ycoord = 'Y',
+                        stratum = "eco_name",
+                        mdcaty = "mdcaty",
+                        shapefile = FALSE)
+
+
+  # Calculate Ripley's K for GRTS output
+  hexa_ecoregion <- subset(hexas, ecoregion %in% large_eco)
+  owinWindow_eco <- as.owin(sf::st_union(hexa_ecoregion))
+  
+  # Centroid coords from selected hexagons
+  coords <- hexa_ecoregion %>%
+                  filter(ET_Index %in% out$ET_Index) %>%
+                  sf::st_centroid() %>%
+                  sf::st_coordinates() %>%
+                  as.data.frame()
+
+  # Transform in a point pattern obj
+  sample_ppp <- ppp(x = coords$X, y = coords$Y, window = owinWindow_eco)
+  
+  # plot rippley's K
+  RipleyGRTS <- as.data.frame(Kest(sample_ppp, correction = "iso"))
+
+#
+
+p1 <- ripley %>%
+        group_by(ecoregion) %>%
+        mutate(label = if_else(r == max(r), ecoregion, NA_character_)) %>%
+        ungroup() %>%
+        ggplot(aes(x = r, y = iso, color = ecoregion)) +
+          geom_line() +
+          geom_label_repel(aes(label = label),
+                  nudge_x = 0,
+                  na.rm = TRUE,
+                  max.overlaps = Inf,
+                  min.segment.length = 0,
+                  segment.size = 0.3,
+                  segment.alpha = 0.9,
+                  size = 1.8,
+                  alpha = 0.9) +
+          geom_line(data = subset(ripley, ecoregion == large_eco), aes(x = r, y = theo), linetype = 'dashed', color = 'black') +
+          geom_line(data = RipleyGRTS, aes(x = r, y = iso), linetype = 'dashed', color = 'red') +
+          facet_grid(~ legacy, labeller = labeller(legacy = c('0' = "Au moins 1 station d'ecoute", '4' = "Au moins 4 station d'ecoute"))) +
+          scale_fill_viridis(discrete = TRUE) + theme_classic() + theme_classic() + theme(legend.position = "none")
+p2 <- ripley %>%
+        filter(r < 50000) %>%
+        group_by(ecoregion) %>%
+        mutate(label = if_else(r == max(r), ecoregion, NA_character_)) %>%
+        ungroup() %>%
+        ggplot(aes(x = r, y = iso, color = ecoregion)) +
+          geom_line() +
+          geom_line(data = subset(ripley, ecoregion == large_eco & r < 50000), aes(x = r, y = theo), linetype = 'dashed', color = 'black') +
+          geom_line(data = subset(RipleyGRTS, r < 50000), aes(x = r, y = iso), linetype = 'dashed', color = 'red') +
+          ylim(c(0, 50000000000)) +
+          geom_label_repel(aes(label = label),
+                  nudge_x = 0,
+                  na.rm = TRUE,
+                  max.overlaps = Inf,
+                  min.segment.length = 0,
+                  segment.size = 0.3,
+                  segment.alpha = 0.9,
+                  size = 1.8,
+                  alpha = 0.9) +
+          facet_grid(~ legacy, labeller = labeller(legacy = c('0' = "Au moins 1 station d'ecoute", '4' = "Au moins 4 station d'ecoute"))) +
+          scale_fill_viridis(discrete = TRUE) + theme_classic() + theme_classic() + theme(legend.position = "none")
+
+ggsave(
+  gridExtra::grid.arrange(p1, p2, nrow = 2, ncol = 1),
+  filename = 'summary_RipleyK.pdf',
+  width = 17,
+  height = 15)
+
+
+
+# Polygons for each ecoregion with at least 2 legacy sites
+for(eco in unique(ripley$ecoregion))
+{
+  # Select hexagons from ecoregion
+  hexa_ecoregion <- subset(hexas, ecoregion == eco)
+
+  # All hexagons with at least 1 legacy site
+  coords <- hexa_ecoregion %>%
+                  filter(legacySite > 0) %>%
+                  sf::st_centroid() %>%
+                  sf::st_coordinates() %>%
+                  as.data.frame()  
+  
+  gg <- ggplot(sf::st_union(hexa_ecoregion)) +
+               geom_sf() + 
+               geom_point(data = coords, aes(X, Y), size = 0.5) +
+               theme_bw() + xlab('') + ylab('') + ggtitle(paste('Ecoregion', eco))
+
+  assign(paste0('plotEco_', eco), gg)
+
+  rm(gg)
+}
+
+gg_main <- ripley %>%
+              filter(legacy == 4) %>%
+              group_by(ecoregion) %>%
+              mutate(label = if_else(r == max(r), ecoregion, NA_character_)) %>%
+              ungroup() %>%
+              ggplot(aes(x = r, y = iso, color = ecoregion)) +
+                  geom_line() +
+                  geom_line(data = subset(ripley, ecoregion == large_eco), aes(x = r, y = theo), linetype = 'dashed', color = 'black') +
+                  geom_line(data = RipleyGRTS, aes(x = r, y = iso), linetype = 'dashed', color = 'red') +
+                  geom_label_repel(aes(label = label),
+                      nudge_x = 0,
+                      na.rm = TRUE,
+                      max.overlaps = Inf,
+                      min.segment.length = 0,
+                      segment.size = 0.3,
+                      segment.alpha = 0.9,
+                      size = 2.2,
+                      alpha = 0.9) +
+                  scale_fill_viridis(discrete = TRUE) + theme_classic() + theme(legend.position = "none")
+
+
+lay <- rbind(c(1, 2, 3, 4),
+             c(5, 6, 6, 7),
+             c(8, 6, 6, 9),
+             c(10, 11, 12, 13))
+
+ggsave(
+  gridExtra::grid.arrange(plotEco_72, plotEco_74, plotEco_75, plotEco_76,
+                          plotEco_96, gg_main, plotEco_99,
+                          plotEco_100, plotEco_101,
+                          plotEco_102, plotEco_103, plotEco_117, plotEco_217,
+                          layout_matrix = lay),
+  filename = 'summary_RipleyK_map.pdf',
+  width = 17,
+  height = 13)
