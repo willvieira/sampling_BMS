@@ -24,10 +24,10 @@ load('data/spatialVectors.rda')
 
 # load hexagons
 hexa_ls <- list()
-for (id in unique(districts$ECOREGION))
+for (id in ecoregions)
 {
-  hexa_ls[[as.character(id)]] <- sf::st_read(paste0('output/', tolower(gsub(' ', '_', unique(subset(districts, ECOREGION == id)$REGION_NAM))), '_', id, '/hexa_', id, '.shp'), quiet = TRUE)
-  hexa_ls[[as.character(id)]]$ecoregion <- id
+  hexa_ls[[id]] <- sf::st_read(paste0('output/', names(ecoregions[ecoregions == id]), '_', id, '/hexa_', id, '.shp'), quiet = TRUE)
+  hexa_ls[[id]]$ecoregion <- id
 }
 
 # rbind all shapefiles into one sf oject
@@ -35,24 +35,11 @@ hexas <- do.call(rbind, hexa_ls)
 rm(hexa_ls)
 
 
-# Hexagon centroid
-hexa_cen <- hexas %>%
-            st_centroid() %>%
-            st_transform(st_crs(districts))
-
-
-# unique ecoregion names and codes
-ecoregions <- setNames(districts$ECOREGION, districts$REGION_NAM)
-
-
 out_dt <- data.frame()
 for(eco in ecoregions)
 {
-    # ecoregion polygon
-    eco_p <- subset(districts, ECOREGION == eco)
-    
     # get hexagons for specific region
-    hexa_eco <- hexas[which(st_intersects(hexa_cen, st_union(eco_p), sparse = FALSE)), ]
+    hexa_eco <- subset(hexas, ecoregion == eco)
 
     # filter NA
     hexa_eco <- hexa_eco[which(!is.na(hexa_eco$propNA)), ]
@@ -66,8 +53,10 @@ for(eco in ecoregions)
 
 
 
-# Calculate sample size based on polygon/ecoregion area
-out_dt$sizeProp <- out_dt$area/sum(out_dt$area)
+# Calculate sample size based on polygon/ecoregion area (removing of ecoregions that have been divided)
+eco_ignore <- which(out_dt$ecoregion %in% gsub('N', '', grep('N', out_dt$ecoregion, value = TRUE)))
+totalArea <- sum(out_dt$area[-eco_ignore])
+out_dt$sizeProp <- out_dt$area/totalArea
 
 
 # save
