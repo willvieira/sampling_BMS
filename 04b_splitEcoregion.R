@@ -24,7 +24,7 @@ load('data/spatialVectors.rda')
 
 
 
-ecoregions_to_split <- c(96, 100, 101, 103)
+ecoregions_to_split <- c(96, 100, 101, 103, 217)
 
 
 for(eco in ecoregions_to_split)
