@@ -41,8 +41,8 @@ for(eco in ecoregions_to_split)
                 sf::st_coordinates() %>%
                 as.data.frame()
 
-    hexa_ecoregionN <- hexa_ecoregion[coords$Y >= 50.3, ]
-    hexa_ecoregionS <- hexa_ecoregion[!(coords$Y >= 50.3), ]
+    hexa_ecoregionN <- hexa_ecoregion[coords$Y >= 50.5, ]
+    hexa_ecoregionS <- hexa_ecoregion[!(coords$Y >= 50.5), ]
     
     # save new splited ecoregion
     sapply(paste0('output/', tolower(gsub(' ', '_', unique(subset(districts, ECOREGION == eco)$REGION_NAM))), '_', eco, c('N', 'S')), dir.create)
