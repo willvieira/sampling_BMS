@@ -23,6 +23,8 @@ library(sf)
 library(spatstat)
 library(tidyverse)
 library(viridis)
+library(ggplot2)
+library(ggrepel)
 load('data/spatialVectors.rda')
 
 
@@ -446,3 +448,68 @@ ggsave(
   filename = 'summary_RipleyK_map.pdf',
   width = 17,
   height = 13)
+
+
+
+# Table to sumarise legacy sites per ecoregion
+# - Sample size (in hexagons)
+# - Sample size (in stations)
+# - Total of legacy sites
+# - Total of hexagons with X legacy sites
+# - Sample size for hypothesis 0 to 4
+
+
+# Get sample size for each ecoregion
+
+    sampleSize <- readRDS('data/nbHexa_ecoregion.RDS')
+
+    # Sample 2% of hexagons available hexagons
+    N_tmp <- sampleSize$hexagonProp80 * 0.02
+
+    # Sample size in function of size proportion between ecoregions
+    eco_ignore <- which(sampleSize$ecoregion %in% gsub('N', '', grep('N', sampleSize$ecoregion, value = TRUE)))
+    totalN <- sum(N_tmp[-eco_ignore])
+    sampleSize$N <- unclass(round(totalN * sampleSize$sizeProp, 0))
+
+#
+ 
+
+# Max of legacy site a hexagon have for the whole study area
+maxLegacySite <- max(hexas$legacySite)
+
+summary_legacy <- data.frame()
+for(eco in unique(hexas$ecoregion))
+{
+    # get hexagons for specific ecoregion
+    hex_eco <- subset(hexas, ecoregion == eco)
+
+    # sample size in hexagons
+    N_eco <- subset(sampleSize, ecoregion == eco)$N
+
+    # Frequence of legacy site stations within hexagons
+    legacySite_freq <- setNames(rep(0, 32), paste0('nb_', 0:31))
+    legacySite_freq[paste0('nb_', names(table(hex_eco$legacySite)))] <- table(hex_eco$legacySite)
+
+    # Sample size after legacy sites
+    N_h1 <- N_h2 <- N_eco
+    N_h3 <- N_eco - nrow(subset(hex_eco, legacySite >= 4))
+    N_h4 <- round((N_eco * 10 - sum(hex_eco$legacySite))/10, 0)
+
+    # assign to data.frame
+    summary_legacy <- rbind(summary_legacy,
+                            data.frame(
+                                ecoregion = eco,
+                                total_hex = nrow(hex_eco),
+                                total_legacySite = sum(hex_eco$legacySite),
+                                data.frame(as.list(legacySite_freq)),
+                                sampleSize_hex = N_eco,
+                                sampleSize_station = N_eco * 10,
+                                sampleSize_h1 = N_h1,
+                                sampleSize_h2 = N_h2,
+                                sampleSize_h3 = ifelse(N_h3 < 0, 0, N_h3),
+                                sampleSize_h4 = ifelse(N_h4 < 0, 0, N_h4)
+                            ))
+
+}
+
+write.csv(summary_legacy, 'summary_legacySite.csv', row.names = FALSE)
