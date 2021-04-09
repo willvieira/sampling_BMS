@@ -44,6 +44,10 @@ for(eco in ecoregions_to_split)
     hexa_ecoregionN <- hexa_ecoregion[coords$Y >= 50.5, ]
     hexa_ecoregionS <- hexa_ecoregion[!(coords$Y >= 50.5), ]
     
+    # Rename hexagon ID to keep ecoregion position
+    hexa_ecoregionN$ET_Index <- paste0(hexa_ecoregionN$ET_Index, 'N')
+    hexa_ecoregionS$ET_Index <- paste0(hexa_ecoregionS$ET_Index, 'S')
+
     # save new splited ecoregion
     sapply(paste0('output/', tolower(gsub(' ', '_', unique(subset(districts, ECOREGION == eco)$REGION_NAM))), '_', eco, c('N', 'S')), dir.create)
 
