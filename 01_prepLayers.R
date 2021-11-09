@@ -6,14 +6,7 @@
 # Import Packages ---------------------------------------------------------
 library(raster)
 library(sf)
-library(mapview)
 
-# Parallel computing 
-raster::beginCluster()
-
-
-# Set raster tmp folder
-# rasterOptions(tmpdir = "/data/sviss/tmp")
 
 ###############################################
 # Prepare spatial layers ---------------------------------------------------------
@@ -26,17 +19,18 @@ area <- read_sf("rawLayers/SOBQ_ATLAS_PERI_Micro_W.shp")
 
 # Read ecoregions
 districts <- read_sf("rawLayers/Ecoregions_Canada_20201209_W.shp")
-#mapview::mapview(districts, zcol = 'ECOREGION')
 
 # Read Hexagons
-# 414163 unique ET_ID
 hexa <- read_sf("rawLayers/HexagonesCND_SOBQ_W2.shp")
 
-######## IMPORT: landcover Canada and Canada adapted from land Quebec
-# Read LCC2015: Habitat proportion
+
+######## IMPORT: land cover Canada
+
+# Read LCC2015: Habitat type from 0 to 19
 land_ca <- raster("rawLayers/CAN_LC_2015_CAL.tif")
 
-# Read LCC2015 adapted from land_Qc (combined info, needs reclassification using `rawLayers/ClassesVegSOBQ_combineV1Fev2021.csv`)
+# Read LCC2015 adapted from land_Qc
+# (combined info, needs reclassification using `rawLayers/ClassesVegSOBQ_combineV1Fev2021.csv`)
 land_caqc <- raster("rawLayers/Landcover_Combine.tif")
 
 # Layer defining the limits of land_caqc within Quebec
@@ -88,7 +82,6 @@ ecoregionsToRm <- c(97, 118, 82, 104)
 districts <- districts[which(!districts$ECOREGION %in% ecoregionsToRm), ]
 
 
-
 # We are not croping aeroports and train as some elements of these layers that
 # are outside study area, but close, may also be used to access sites
 # For roads and trails, we will expand (buffer) study area by 10 km to get roads and trails outside but close to the study area
@@ -96,9 +89,11 @@ area_expanded <- st_buffer(area, dist = 10000)
 roads_qc <- st_crop(roads_qc, area_expanded)
 roads_lb <- st_crop(roads_lb, area_expanded)
 trails <- st_crop(trails, area_expanded)
+rm(area_expanded)
 
 
 ####### TRANSFORM: filter aeroports
+
 ## Infrastructure: either 'Aéroport', 'Héliport' or 'Aérodrome'
 ## Carburant == 'OUI'
 aeroports_qc <- aeroports_qc[which(aeroports_qc$typeinfras %in% c('Aéroport', 'Héliport', 'Aérodrome')), ]
@@ -166,7 +161,8 @@ land_caqc <- reclassify(land_caqc, from_to)
 
 # Save rasters/Landcovers
 writeRaster(land_ca, filename = "data/landcover_ca_30m", format = "GTiff")
-writeRaster(land_caqc, filename = "data/landcover_caqc_30m", format = "GTiff")
+writeRaster(land_caqc_repro, filename = "data/landcover_caqc_30m", format = "GTiff")
 
 # Save vector data
 save(area, districts, hexa, roads, trails, aeroports, train, file = "data/spatialVectors.rda")
+    

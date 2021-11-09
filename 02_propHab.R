@@ -12,6 +12,7 @@ library(stringr)
 library(doParallel)
 doParallel::registerDoParallel(parallel::detectCores() - 1)
 
+# load data layers
 load("data/spatialVectors.rda")
 land_ca <- raster("data/landcover_ca_30m.tif")
 land_caqc <- raster("data/landcover_caqc_30m.tif")
@@ -50,8 +51,9 @@ prevalence_hab <- function(ecoregion, landcover)
 
 # Calculate habitat prevalence for each ecoregion in parallel
 # Using two different habitat layers depending on the ecoregion
+# The ecoregion will use the `land_caqc` layer if its fully covered by this layer, otherwise use the `land_ca` layer
 
-# Ecoregions to use land_ca (using land_ca because there is no information from land_caqc available)
+# Define ecoregions to use land_ca and land_caqc
 eco_land_ca <- c(28, 30, 46, 48, 49, 78, 86, 216)
 eco_land_caqc <- setdiff(unique(districts$ECOREGION), eco_land_ca)
 
@@ -59,7 +61,7 @@ prev_ca_by_ecoregion <- foreach(i = eco_land_ca, .packages = "raster") %dopar% {
     try(prevalence_hab(ecoregion = subset(districts, ECOREGION == i), landcover = land_ca))
 }
 
-# Adjust crs to the match with land_caqc
+# Adjust crs of district layer to match with land_caqc
 districts_caqc <- sf::st_transform(districts, sf::st_crs(land_caqc))
 
 prev_caqc_by_ecoregion <- foreach(i = eco_land_caqc, .packages = "raster") %dopar% {
@@ -207,7 +209,7 @@ stopImplicitCluster()
 # Plot percentage of NA for each hexagon
 ###############################################
 
-pdf('proportionNA_ecoregion.pdf', width = 12, height = 6)
+pdf('images/proportionNA_ecoregion.pdf', width = 12, height = 6)
 for(id in unique(districts$ECOREGION))
 {
     # Select ecoregion

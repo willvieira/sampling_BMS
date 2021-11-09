@@ -70,7 +70,7 @@ habitat_colors <- c(land_ca_1 = rgb(0, 61, 0, maxColorValue = 255),
 
 
 
-pdf('summary_by_ecoregion.pdf', width = 8, height = 15)
+pdf('images/summary_by_ecoregion.pdf', width = 8, height = 15)
 for(id in ecoregions)
 {
     # Select hexagons from ecoregion
@@ -384,9 +384,10 @@ p2 <- ripley %>%
 
 ggsave(
   gridExtra::grid.arrange(p1, p2, nrow = 2, ncol = 1),
-  filename = 'summary_RipleyK.pdf',
+  filename = 'images/summary_RipleyK.pdf',
   width = 17,
-  height = 15)
+  height = 15
+)
 
 
 
@@ -445,7 +446,7 @@ ggsave(
                           plotEco_100, plotEco_101,
                           plotEco_102, plotEco_103, plotEco_117, plotEco_217,
                           layout_matrix = lay),
-  filename = 'summary_RipleyK_map.pdf',
+  filename = 'images/summary_RipleyK_map.pdf',
   width = 17,
   height = 13)
 
