@@ -48,3 +48,4 @@ data/*
 output/*
 docs/*
 maps/*
+sim_weight/*
