@@ -12,8 +12,12 @@ doParallel::registerDoParallel(parallel::detectCores() - 1)
 
 
 # Load spatial vectors
-load("data/spatialVectors.rda")
 land_ca <- raster::raster("data/landcover_ca_30m.tif")
+districts <- readRDS('data/districts.RDS')
+hexa <- readRDS('data/hexa.RDS')
+roads <- readRDS('data/roads.RDS')
+trails <- readRDS('data/trails.RDS')
+train <- readRDS('data/train.RDS')
 
 
 

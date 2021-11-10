@@ -164,5 +164,10 @@ writeRaster(land_ca, filename = "data/landcover_ca_30m", format = "GTiff")
 writeRaster(land_caqc_repro, filename = "data/landcover_caqc_30m", format = "GTiff")
 
 # Save vector data
-save(area, districts, hexa, roads, trails, aeroports, train, file = "data/spatialVectors.rda")
-    
+saveRDS(area, 'data/area.RDS')
+saveRDS(districts, 'data/districts.RDS')
+saveRDS(hexa, 'data/hexa.RDS')
+saveRDS(roads, 'data/roads.RDS')
+saveRDS(trails, 'data/trails.RDS')
+saveRDS(aeroports, 'data/aeroports.RDS')
+saveRDS(train, 'data/train.RDS')

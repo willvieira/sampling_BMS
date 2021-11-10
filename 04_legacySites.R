@@ -18,7 +18,7 @@ library(sf)
 
 
 # load all info
-load('data/spatialVectors.rda')
+districts <- readRDS('data/districts.RDS')
 legacy_sites <- sf::st_read('rawLayers/Registre_LegacyV1_W4.shp') %>%
                 sf::st_transform(sf::st_crs(hexa))
 

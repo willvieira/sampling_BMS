@@ -9,7 +9,8 @@
 library(tidyverse)
 library(sf)
 
-load('data/spatialVectors.rda')
+
+districts <- readRDS('data/districts.RDS')
 
 
 
@@ -20,6 +21,7 @@ load('data/spatialVectors.rda')
 #   - Split hexagons whithin ecoregion between above and bellow 50.3"
 #   - Save new hexagons as a new ecoregion ecoX_S and ecoX_S
 # - Add the new ecoregions to the list of ecoregions to be used later
+# - merge the all hexagons into a single object (and file)
 ########################################################################
 
 
@@ -70,5 +72,24 @@ eco_sort <- gsub('N', '.1', ecoregions)
 eco_sort <- gsub('S', '.2', eco_sort)
 ecoregions <- ecoregions[match(sort(as.numeric(eco_sort)), as.numeric(eco_sort))]
 
-# Save with existing objs
-save(area, districts, hexa, roads, trails, aeroports, train, ecoregions, file = "data/spatialVectors.rda")
+# Save
+saveRDS(ecoregions, 'data/ecoregions.RDS')
+
+
+
+
+# merge the all hexagons into a single object (and file)
+
+hexa_ls <- list()
+for (id in ecoregions)
+{
+  hexa_ls[[id]] <- sf::st_read(paste0('output/', names(ecoregions[ecoregions == id]), '_', id, '/hexa_', id, '.shp'), quiet = TRUE)
+  hexa_ls[[id]]$ecoregion <- id
+}
+
+# rbind all shapefiles into one sf oject
+hexas <- do.call(rbind, hexa_ls)
+
+
+# save
+saveRDS(hexas, 'data/hexa_complete.RDS')

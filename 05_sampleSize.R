@@ -8,7 +8,9 @@
 library(tidyverse)
 library(sf)
 
-load('data/spatialVectors.rda')
+
+ecoregions <- readRDS('data/ecoregions.RDS')
+hexas <- readRDS('data/hexa_complete.RDS')
 
 
 ########################################################################
@@ -21,18 +23,6 @@ load('data/spatialVectors.rda')
 # - save object with ecoregion name/code and sample size
 ########################################################################
 
-
-# load hexagons
-hexa_ls <- list()
-for (id in ecoregions)
-{
-  hexa_ls[[id]] <- sf::st_read(paste0('output/', names(ecoregions[ecoregions == id]), '_', id, '/hexa_', id, '.shp'), quiet = TRUE)
-  hexa_ls[[id]]$ecoregion <- id
-}
-
-# rbind all shapefiles into one sf oject
-hexas <- do.call(rbind, hexa_ls)
-rm(hexa_ls)
 
 
 out_dt <- data.frame()

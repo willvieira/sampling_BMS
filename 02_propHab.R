@@ -13,9 +13,10 @@ library(doParallel)
 doParallel::registerDoParallel(parallel::detectCores() - 1)
 
 # load data layers
-load("data/spatialVectors.rda")
 land_ca <- raster("data/landcover_ca_30m.tif")
 land_caqc <- raster("data/landcover_caqc_30m.tif")
+districts <- readRDS('data/districts.RDS')
+hexa <- readRDS('data/hexa.RDS')
 
 
 

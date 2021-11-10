@@ -25,22 +25,10 @@ library(tidyverse)
 library(viridis)
 library(ggplot2)
 library(ggrepel)
-load('data/spatialVectors.rda')
 
 
-# Load all ecoregion's hexa and merge them together
-#####################################################################
-
-hexa_ls <- list()
-for (id in ecoregions)
-{
-  hexa_ls[[id]] <- sf::st_read(paste0('output/', names(ecoregions[ecoregions == id]), '_', id, '/hexa_', id, '.shp'), quiet = TRUE)
-  hexa_ls[[id]]$ecoregion <- id
-}
-
-# rbind all shapefiles into one sf oject
-hexas <- do.call(rbind, hexa_ls)
-rm(hexa_ls)
+ecoregions <- readRDS('data/ecoregions.RDS')
+hexas <- readRDS('data/hexa_complete.RDS')
 
 
 
