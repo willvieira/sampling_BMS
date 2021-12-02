@@ -1,2 +1,4 @@
-# samplingBMS
-Drolet &amp; al - 2020
+# Birds monitoring survey
+
+Sampling design for monitoring boreal birds in Quebec
+
