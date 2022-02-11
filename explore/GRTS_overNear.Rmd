@@ -1,0 +1,247 @@
+---
+title: "How the Nearest Neighbour Method selects over samples"
+author: Will Vieira
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## Setup
+
+```{r,warning=F,message=F}
+library(leaflet)
+library(mapview)
+library(tidyverse)
+library(sf)
+library(spatstat)
+
+set.seed(0.0)
+
+hexas <- readRDS('../data/hexa_complete.RDS')
+
+# First filter for hexagons that have at least 20% of sampleable pixel habitats (non NAs)
+hexas <- subset(hexas, propNA <= 0.8)
+
+# calculate p
+hexas$p <- (hexas$hab_prob * hexas$cost_prob) / sum(hexas$hab_prob * hexas$cost_prob)
+
+# remove zeros
+hexas <- subset(hexas, p != 0)
+
+```
+
+
+
+```{r}
+# Get sample size for each ecoregion
+sampleSize <- readRDS('../data/nbHexa_ecoregion.RDS')
+
+# Sample 2% of available hexagons
+N_tmp <- sampleSize$hexagonProp80 * 0.02
+
+# Keep only North and South part of splited ecoregions
+eco_ignore <- which(sampleSize$ecoregion %in% gsub('N', '', grep('N', sampleSize$ecoregion, value = TRUE)))
+
+# Sample size as a function of ecoregion size
+totalN <- sum(N_tmp[-eco_ignore])
+sampleSize$N <- unclass(round(totalN * sampleSize$sizeProp, 0))
+
+# Remove ecoregions with N == 0
+sampleSize <- subset(sampleSize, N != 0)
+```
+
+
+## Run GRTS
+
+```{r}
+# number of replications for each simulation
+nb_rep <- 30
+
+# Ecoregions
+eco_sim <- c(
+    '7', '28', '30', '31', '47', '48', '49', '73', '77', '78', '86',
+    '72', '74', '75', '76',
+    #'46',
+    '96N', #'96', '96S',
+    '99',
+    '100N', #'100', '100S',
+    '101N', #'101', '101S',
+    '102',
+    '103N', #'103', '103S',
+    '117',
+    '216',
+    '217N'#, '217', '217S'
+)
+```
+
+
+```{r}
+# Sample size by stratum (ecoregion)
+Stratdsgn  <- c()
+for(eco in eco_sim)
+    Stratdsgn <- append(
+        Stratdsgn,
+        setNames(
+            subset(sampleSize, ecoregion == eco)$N,
+            paste0('eco_', eco)
+        )
+    )
+
+# Sample frame for specific ecoregions
+sample_frame <- subset(hexas, ecoregion %in% eco_sim)
+
+# rename ecoregion name to match design name
+sample_frame$eco_name <- paste0('eco_', sample_frame$ecoregion)
+
+# Keep only centroid of hexagon for GRTS
+sample_frame$geometry <- sample_frame %>%
+    sf::st_centroid() %>%
+    sf::st_geometry()
+
+
+# calculate inclusion probability given total sample size
+sample_frame$mdcaty <- sum(subset(sampleSize, ecoregion %in% eco_sim)$N) * sample_frame$p/sum(sample_frame$p)
+```
+
+
+```{r}
+# list to save nb_rep simulations   
+out_sim <- list()
+
+# run GRTS
+for (i in 1:nb_rep)
+{
+    out_sample <- spsurvey::grts(
+        sframe = sample_frame,
+        n_base = Stratdsgn,
+        stratum_var = 'eco_name',
+        aux_var = 'mdcaty',
+        n_near = 1
+    )
+
+    out_sim[[i]] <- c(
+        setNames(
+            out_sample$sites_base$ET_Index,
+            rep('main', nrow(out_sample$sites_base))
+        ),
+        setNames(
+            out_sample$sites_near$ET_Index,
+            rep('over', nrow(out_sample$sites_near))
+        )
+    )
+}
+```
+
+
+## Extract inclusion probability of the 6 neighbour hexagons
+
+```{r}
+incProb <- data.frame()
+
+for(i in 1:nb_rep)
+{
+    # get hexagons ID selected for main
+    hexas_i_main <- out_sim[[i]][which(names(out_sim[[i]]) == 'main')]
+
+    # extract neigbours inside buffer of 5.5Km around centroid
+    neighbours <- st_intersects(
+        st_buffer(
+            sample_frame[match(hexas_i_main, sample_frame$ET_Index), ],
+            dist = 5500
+        ),
+        sample_frame
+    )
+    # Transform list to data.frame
+    incProb <- rbind(
+        incProb,
+        data.frame(
+            rep = i,
+            ET_Index_main = rep(hexas_i_main, lengths(neighbours)),
+            ET_Index_near = sample_frame$ET_Index[unlist(neighbours)],
+            p = sample_frame$p[unlist(neighbours)]
+        )
+    )
+}
+
+# remove the target hexagon from over column
+incProb <- incProb[!incProb$ET_Index_main == incProb$ET_Index_near, ]
+
+# define which neighbour hexagon was selected
+incProb$selected <- 0
+
+for(i in 1:nb_rep)
+{
+    # get hexagons ID selected for main
+    hexas_i_main <- out_sim[[i]][which(names(out_sim[[i]]) == 'main')]
+    hexas_i_over <- out_sim[[i]][which(names(out_sim[[i]]) == 'over')]
+
+    # I do need a second loop to avoid the same hexagon being a neighb twice     
+    for(j in 1:length(hexas_i_main))
+    {
+        row_ij <- which(
+                incProb$rep == i &
+                incProb$ET_Index_main == hexas_i_main[j] &
+                incProb$ET_Index_near == hexas_i_over[j]
+            )
+        incProb$selected[row_ij] <- 1
+    }
+}
+```
+
+
+## Analysis
+
+### Does the selected "over" hexagon have the highest inclusion probability among the 6 neighboring hexagons? 
+
+We extracted the inclusion probability $p$ from the 6 neighboring hexagons around the "main" hexagon, sorted these $p$ in ascending order, and classified the ranking position of the selected "over" hexagon. For instance, if the selected "over" hexagon has the highest probability $p$ among the 6 neighbours, its ranking position will be 1.
+
+```{r,message=F, warning=F, echo=F, fig.align='center', fig.width=8}
+incProb %>%
+    group_by(rep, ET_Index_main) %>%
+    mutate(
+        sel_total = sum(selected)
+    ) %>%
+    group_by(rep, ET_Index_main) %>%
+    filter(sel_total == 1) %>%
+    group_by(rep, ET_Index_main) %>%
+    summarise(
+        p_pos = which(p[selected == 1] == sort(p))/length(p),
+        p_selected = p[selected == 1],
+        max_p = max(p),
+        min_p = min(p)
+    ) %>%
+    ggplot(aes(p_pos)) +
+        geom_histogram() +
+        xlab('Ranking position') +
+        ggtitle('Distribution of ranking position for all selected "over" hexagons', subtitle = paste0('Ecoregions: ', paste0(eco_sim, collapse = ', '), '\n(30 replications)'))
+```
+
+```{r, echo=F}
+# position_dist %>%
+#     ggplot(aes(max_p, min_p, color = p_pos)) +
+#         geom_point(alpha = .2) +
+#         xlim(0, 0.0002) + 
+#         ylim(0, 0.0001)
+```
+
+
+## Example
+
+Ecoregion 101 nord:
+
+```{r, fig.width=9.5, fig.height=8,echo=F}
+hex_101 <- subset(hexas, ecoregion %in% c('101N'))
+
+hex_101$selection <- NA
+hex_101$selection[
+    hex_101$ET_Index %in% out_sim[[1]][which(names(out_sim[[1]]) == 'main')]
+] <- 'main'
+hex_101$selection[
+    hex_101$ET_Index %in% out_sim[[1]][which(names(out_sim[[1]]) == 'over')]
+] <- 'over'
+
+mapview(hex_101[, c('ET_Index', 'selection', 'p')], zcol = 'selection')
+```
