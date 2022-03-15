@@ -1,0 +1,629 @@
+---
+title: "How to account for historical (Legacy) sites using the GRTS function"
+author: Will Vieira
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r libraries,warning=F,message=F}
+library(leaflet)
+library(mapview)
+library(tidyverse)
+library(sf)
+library(spatstat)
+library(kableExtra)
+library(spsurvey)
+library(MBHdesign)
+
+set.seed(0.0)
+
+hexas <- readRDS('../data/hexa_complete.RDS')
+
+# First filter for hexagons that have at least 20% of sampleable pixel habitats (non NAs)
+hexas <- subset(hexas, propNA <= 0.8)
+
+# calculate p
+hexas$p <- (hexas$hab_prob * hexas$cost_prob) / sum(hexas$hab_prob * hexas$cost_prob)
+
+# remove zeros
+hexas <- subset(hexas, p != 0)
+
+```
+
+
+
+```{r sampleSize}
+# Get sample size for each ecoregion
+sampleSize <- readRDS('../data/nbHexa_ecoregion.RDS')
+
+# Sample 2% of available hexagons
+N_tmp <- sampleSize$hexagonProp80 * 0.02
+
+# Keep only North and South part of splited ecoregions
+eco_ignore <- which(sampleSize$ecoregion %in% gsub('N', '', grep('N', sampleSize$ecoregion, value = TRUE)))
+
+# Sample size as a function of ecoregion size
+totalN <- sum(N_tmp[-eco_ignore])
+sampleSize$N <- unclass(round(totalN * sampleSize$sizeProp, 0))
+
+# Remove ecoregions with N == 0
+sampleSize <- subset(sampleSize, N != 0)
+
+
+# number of replications for each simulation
+nb_rep <- 10
+
+# Ecoregions
+eco_sim <- c(
+    '7', '28', '30', '31', '47', '48', '49', '73', '77', '78', '86',
+    '72', '74', '75', '76',
+    #'46',
+    '96N', '96S',
+    '99',
+    '100N', '100S',
+    '101N', '101S',
+    '102',
+    '103N', '103S',
+    '117',
+    '216',
+    '217N', '217S'
+)
+
+
+# filter for ecoregions with at least 1 legacy site
+eco_sim <- hexas %>%
+    st_drop_geometry() %>%
+    filter(ecoregion %in% eco_sim) %>%
+    group_by(ecoregion) %>%
+    summarise(total_legacy = sum(legacySite)) %>%
+    filter(total_legacy > 0) %>%
+    pull(ecoregion)
+    
+```
+
+
+## Run GRTS
+
+
+```{r GRTS setup}
+# Sample size by stratum (ecoregion)
+Stratdsgn_noLegacy  <- c()
+for(eco in eco_sim)
+    Stratdsgn_noLegacy <- append(
+        Stratdsgn_noLegacy,
+        setNames(
+            subset(sampleSize, ecoregion == eco)$N,
+            paste0('eco_', eco)
+        )
+    )
+
+# Sample size by stratum (ecoregion) + nb legacy Site (required by GRTS)
+Stratdsgn_legacy  <- c()
+for(eco in eco_sim)
+    Stratdsgn_legacy <- append(
+        Stratdsgn_legacy,
+        setNames(
+            subset(sampleSize, ecoregion == eco)$N +
+            sum(subset(hexas, ecoregion == eco)$legacySite > 0),
+            paste0('eco_', eco)
+        )
+    )
+
+
+# Sample frame for specific ecoregions
+sampleFrame_legacy <- sampleFrame_noLegacy <- subset(hexas, ecoregion %in% eco_sim)
+
+sampleFrame_noLegacy <- sampleFrame_noLegacy %>%
+    mutate(
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        mdcaty = sum(subset(sampleSize, ecoregion %in% eco_sim)$N) *
+        p/sum(p), # p given total sample size
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+
+
+sampleFrame_legacy <- sampleFrame_legacy %>%
+    mutate(
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        mdcaty = (sum(subset(hexas, ecoregion %in% eco_sim)$legacySite > 0) + sum(subset(sampleSize, ecoregion %in% eco_sim)$N)) *
+        p/sum(p), # p given total sample size
+        legacy_var = ifelse(legacySite == 0, NA, legacySite),
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+```
+
+```{r run GRTS}
+# list to save nb_rep simulations   
+out_legacy <- out_noLegacy <- list()
+
+# run GRTS
+for (i in 1:nb_rep)
+{
+    out_sample_noLegacy <- spsurvey::grts(
+        sframe = sampleFrame_noLegacy,
+        n_base = Stratdsgn_noLegacy,
+        stratum_var = 'eco_name',
+        aux_var = 'mdcaty',
+        n_near = 1
+    )
+
+    out_sample_legacy <- spsurvey::grts(
+        sframe = sampleFrame_legacy,
+        n_base = Stratdsgn_legacy,
+        stratum_var = 'eco_name',
+        aux_var = 'mdcaty',
+        n_near = 1,
+        legacy_var = 'legacy_var'
+    )
+
+    out_noLegacy[[i]] <- list(
+        main = out_sample_noLegacy$sites_base$ET_Index,
+        over = out_sample_noLegacy$sites_near
+    )
+    out_legacy[[i]] <- list(
+        main = out_sample_legacy$sites_base$ET_Index,
+        over = out_sample_legacy$sites_near
+    )
+}
+```
+
+## Analysis
+
+<!--
+## How many legacy sites are selected on average when using the `legacy_var` option from GRTS?
+
+Compared when no legacy information is used (`noLegacy` column)
+--->
+
+```{r analysis1,echo=F,eval=F}
+nbLegacy_dt <- data.frame()
+
+for(eco in eco_sim)
+{
+    for(i in 1:nb_rep)
+    {
+        nb_legacy <- hexas %>%
+            st_drop_geometry() %>%
+            filter(ET_Index %in% out_legacy[[i]]$main) %>%
+            filter(ecoregion == eco) %>%
+            summarise(nb = sum(legacySite > 0)) %>%
+            pull(nb)
+        
+        nb_noLegacy <- hexas %>%
+            st_drop_geometry() %>%
+            filter(ET_Index %in% out_noLegacy[[i]]$main) %>%
+            filter(ecoregion == eco) %>%
+            summarise(nb = sum(legacySite > 0)) %>%
+            pull(nb)
+
+        nbLegacy_dt <- rbind(
+            nbLegacy_dt,
+            data.frame(
+                ecoregion = eco,
+                Rep = i,
+                nb_legacy = nb_legacy,
+                nb_noLegacy = nb_noLegacy
+            )
+        )
+    }
+}
+```
+
+
+```{r plot1,echo=F, eval=FALSE}
+nbLegacy_dt %>%
+    group_by(ecoregion) %>%
+    summarise(
+        legacy_var = mean(nb_legacy),
+        noLegacy = mean(nb_noLegacy)
+    ) %>%
+    kbl() %>%
+    kable_paper("hover", full_width = F)
+```
+
+
+### Using the `legacy_var` option on GRTS will increase the average distance between selected sites and legacy sites?
+
+For each replication, I computed the average euclidean distance between the selected sites and the legacy sites for two simulations: (i) with and (ii) without legacy information provided to the GRTS function.
+I expect the average distance of the `legacy_var` simulation to be smaller than the `noLegacy` simulation.
+
+```{r analysis2,echo=F}
+dist_dt <- data.frame()
+dist_min <- data.frame()
+
+for(eco in eco_sim)
+{
+    legacy <- hexas %>%
+        filter(ecoregion == eco & legacySite > 0)
+    legacy_len <- nrow(legacy)
+
+    for(rep in 1:nb_rep)
+    {
+        selected_legacy <- hexas %>% 
+            filter(ET_Index %in% out_legacy[[rep]]$main) %>%
+            filter(ecoregion == eco)
+        selected_noLegacy <- hexas %>% 
+            filter(ET_Index %in% out_noLegacy[[rep]]$main) %>%
+            filter(ecoregion == eco)
+        
+        Dist_mt_legacy <- st_distance(selected_legacy, legacy)
+        Dist_mt_noLegacy <- st_distance(selected_noLegacy, legacy)
+
+        dist_dt <- rbind(
+            dist_dt,
+            data.frame(
+                ecoregion = eco,
+                Rep = rep,
+                sim = c(
+                    rep('legacy_var', nrow(selected_legacy) * legacy_len),
+                    rep('noLegacy', nrow(selected_noLegacy) * legacy_len)
+                    ),
+                dist = c(
+                    as.vector(Dist_mt_legacy),
+                    as.vector(Dist_mt_noLegacy)
+                )
+            )
+        )
+
+        dist_min <- rbind(
+            dist_min,
+            data.frame(
+                ecoregion = eco,
+                Rep = rep,
+                sim = c(
+                    rep('legacy', nrow(selected_legacy)),
+                    rep('noLegacy', nrow(selected_noLegacy))
+                    ),
+                dist = c(
+                    apply(Dist_mt_legacy, 1, min),
+                    apply(Dist_mt_noLegacy, 1, min)
+                )
+            )
+        )
+    }
+}
+```
+
+
+```{r plot2,echo=F,fig.width=12,fig.height=10}
+dist_dt %>%
+    mutate(sim = as.factor(sim)) %>%
+    ggplot(aes(y = dist, x = sim, color = sim, fill = sim)) +
+        facet_wrap(~ecoregion, scales = 'free') +
+        geom_boxplot(alpha = 0.5) +
+        xlab('') +
+        ylab('Average distance between selected sites and legacy sites (m)') +
+        theme_classic() +
+        theme(
+            legend.position = 'none'
+        )
+```
+
+
+
+
+### What if we use the distance from the closest legacy site?
+
+As there was no difference between the simulations, I computed the distance for each selected hexagon to its closest legacy site.
+This may avoid the loss of signal when averaging the distance of a selected site with all legacy sites distributed over the ecoregion.
+
+
+```{r plot3,echo=F,fig.width=12,fig.height=10}
+dist_min %>%
+    mutate(sim = as.factor(sim)) %>%
+    ggplot(aes(y = dist, x = sim, color = sim, fill = sim)) +
+        facet_wrap(~ecoregion, scales = 'free') +
+        geom_boxplot(alpha = 0.5) +
+        xlab('') +
+        ylab('Distance between a selected site and its closest legacy sites (m)') +
+        theme_classic() +
+        theme(
+            legend.position = 'none'
+        )
+
+# dist_min %>%
+#     mutate(sim = as.factor(sim)) %>%
+#     ggplot(aes(y = dist, x = sim, color = sim, fill = sim)) +
+#         facet_grid(ecoregion ~ Rep, scales = 'free') +
+#         geom_boxplot(alpha = 0.5) +
+#         xlab('') +
+#         theme_classic() +
+#         theme(
+#             legend.position = 'none'
+#         )
+```
+
+
+
+
+
+## Run GRTS with altered inclusion probability using the `MBHdesign` R package
+
+As the native legacy functionality in the GRTS does not account for the distance between potential sites and legacy sites, here I will use the `MBHdesign` R package to change the inclusion probability of potential sites according to their distance to legacy sites.
+The inclusion probability of potential sites is changed as a function of their distance to nearby legacy sites, according to the negative exponential distribution with parameter $\sigma$.
+
+```{r,echo=FALSE,fig.align='center',fig.width=5,fig.height=3.5}
+par(mar = c(2.2, 2.2, 1.2, 0.8), oma = c(0, 0, .5, 0), mgp = c(1.2, 0.2, 0), tck = -.008, cex = 0.8)
+# exp function
+Exp = function(dist, sigma) return ( exp(-dist^2/sigma^2) )
+# Diff parameter values
+sigmas = c(1000, 4000, 6000, 10000, 15000, 20000)
+# viz
+plot(0, pch = '', xlim = c(0, 40000), ylim = c(0, 1), type = 'l', xlab = 'distance from legacy site (m)', ylab = 'Legacy effect')
+for(i in sigmas) 
+    lines(Exp(1:40000, sigma = i), col = which(i == sigmas))  
+legend('topright', legend = sigmas, col = 1:length(sigmas), lty = 1, bty = 'n')
+```
+
+### Example of altered inclusion probability for different values of $\sigma$
+
+Example from the `MBHdesign` R package vignette ([link](https://cran.r-project.org/web/packages/MBHdesign/vignettes/MBHdesign.pdf)).
+
+```{r example1,fig.width=10,fig.height=8,warning=FALSE}
+#number of samples
+n <- 10
+#number of points to sample from
+N <- 100^2
+#the sampling grid (offset so that the edge locations have same area)
+offsetX <- 1/(2*sqrt( N))
+my.seq <- seq(from=offsetX, to=100000-offsetX, length=sqrt(N))
+X <- expand.grid( my.seq, my.seq)
+#the legacy sites (three of them)
+set.seed(10)
+legacySites <- matrix(sample(1:100000, 6, replace = FALSE), ncol = 2, byrow = TRUE)
+#names can be useful
+colnames(X) <- colnames( legacySites) <- c("X1","X2")
+
+#non-uniform inclusion probabilities
+inclProbs <- 1-exp(-X[,1]/100000)
+#scaling to enforce summation to n
+inclProbs <- n * inclProbs / sum( inclProbs)
+
+# adj according to different values of sigma
+sigmas <- c(2000, 10000, 40000)
+
+incl_ls <- list('Unadjusted inclusion Probabilities' = inclProbs)
+for(sgm in sigmas)
+    incl_ls[[paste0('Adjusted inclusion probabilities (σ = ', sgm, ')')]] <- MBHdesign::alterInclProbs(
+        legacy.sites = legacySites, 
+        potential.sites = X,
+        inclusion.probs = inclProbs,
+        sigma = sgm
+    ) 
+
+par(mfrow = c(2, 2), mar = c(0.5, 0.5, 1.5, 0.5), oma = c(1.5, 1.5, .5, 0), mgp = c(1.2, 0.2, 0), tck = -.008, cex = 0.8)
+for(i in 1:length(incl_ls)) {
+    plot(X, pch = 19, cex = 1.2, col = viridis::viridis(N)[rank(incl_ls[[i]])], 
+    xlab = '', ylab = '', xaxt = 'n', yaxt = 'n')
+    axis(1, labels = ifelse(i %in% c(3, 4), T, F))
+    axis(2, labels = ifelse(i %in% c(1, 3), T, F))
+    mtext(names(incl_ls)[i], 3, line = 0) 
+    points(legacySites, pch = 21, bg = 'grey', cex = 1.5)
+}
+```
+
+
+### Run GRTS with alterd inclusion probabilities
+
+```{r run GRTS2,warning=FALSE}
+sampleFrame_legacy <- subset(hexas, ecoregion %in% eco_sim)
+
+sampleFrame_legacy <- sampleFrame_legacy %>%
+    mutate(
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        mdcaty = sum(subset(sampleSize, ecoregion %in% eco_sim)$N) *
+        p/sum(p), # p given total sample size
+        legacy_var = ifelse(legacySite == 0, NA, legacySite),
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+
+
+# coordinates in matrix format for MBHdesign
+coord_mt <- sampleFrame_legacy %>%
+    st_coordinates()
+
+legacySites <- sampleFrame_legacy %>%
+    filter(legacySite > 0) %>%
+    st_coordinates()
+
+sigmas <- c(1000, 5000, 10000, 15000, 20000)
+for(sgm in 1:length(sigmas))
+    sampleFrame_legacy[[paste0('pAdj_', sgm)]] <- 
+        MBHdesign::alterInclProbs(
+            legacy.sites = legacySites,
+            potential.sites = coord_mt,
+            inclusion.probs = sampleFrame_legacy$mdcaty,
+            sigma = sigmas[sgm]
+        )
+
+```
+
+#### Ecoregion 101 as an example
+
+Normalized inclusion probabilities for different values of $\sigma$.
+All hexagons with one or more legacy sites are colored in red.
+
+```{r example2,echo=FALSE, fig.align='center', fig.width=12,fig.height=15,warning=FALSE}
+hexas %>%
+    filter(ecoregion %in% eco_sim) %>%
+    bind_cols(st_drop_geometry(sampleFrame_legacy[, c('ET_Index', 'mdcaty', paste0('pAdj_', 1:length(sigmas)))])) %>%
+    filter(ecoregion %in% c('101S', '101N') & mdcaty < 0.1) %>%
+    mutate(
+        sim1 = (mdcaty - min(mdcaty))/(max(mdcaty) - min(mdcaty)),
+        sim2 = (pAdj_1 - min(pAdj_1))/(max(pAdj_1) - min(pAdj_1)),
+        sim3 = (pAdj_2 - min(pAdj_2))/(max(pAdj_2) - min(pAdj_2)),
+        sim4 = (pAdj_3 - min(pAdj_3))/(max(pAdj_3) - min(pAdj_3)),
+        sim5 = (pAdj_4 - min(pAdj_4))/(max(pAdj_4) - min(pAdj_4)),
+        sim6 = (pAdj_5 - min(pAdj_5))/(max(pAdj_5) - min(pAdj_5))
+    ) %>%
+    select(ecoregion, starts_with('sim')) %>%
+    pivot_longer(cols = starts_with('sim')) %>%
+    ggplot() +
+        geom_sf(aes(fill = value), lwd = 0) +
+        viridis::scale_fill_viridis(option = "D") +
+        geom_sf(data = subset(sampleFrame_legacy, ecoregion %in% c('101S', '101N') & legacySite > 0), color = 'red', alpha = 0.7, size = 0.15) +
+        facet_wrap(
+            ~name,
+            labeller = labeller(
+                name = setNames(
+                    c('Unadjusted inclusion Probabilities', paste0('σ = ', sigmas)),
+                    paste0('sim', 1:6)
+                )
+            )
+        ) + 
+        theme(legend.position = 'none')
+    
+```
+
+
+### Run GRTS
+
+```{r run GRTS3,eval=F}
+out_sigmas <- list('Unadjusted' = out_legacy)
+
+for(sgm in 1:length(sigmas))
+{
+    out_ls <- list()
+    # run GRTS
+    for (i in 1:nb_rep)
+    {
+        out_sample_legacy <- spsurvey::grts(
+            sframe = sampleFrame_legacy,
+            n_base = Stratdsgn_legacy,
+            stratum_var = 'eco_name',
+            aux_var = paste0('pAdj_', sgm),
+            n_near = 1
+        )
+
+        out_ls[[i]] <- list(
+            main = out_sample_legacy$sites_base$ET_Index,
+            over = out_sample_legacy$sites_near
+        )
+    }
+
+    out_sigmas[[paste0('sigma_', sigmas[sgm])]] <- out_ls
+}
+```
+
+
+
+
+## Analysis
+
+### Will altered inclusion probabilities increase the average distance between selected sites and legacy sites?
+
+For each replication, I computed the average euclidean distance between the selected sites and the legacy sites for two simulations: (i) Unadjusted vs (ii)adjusted inclusion probabilities in function of the distance to legacy sites.
+
+```{r analyses2,echo=F}
+# dist_dt <- data.frame()
+# dist_min <- data.frame()
+
+# for(eco in eco_sim)
+# {
+#     legacy <- hexas %>%
+#         filter(ecoregion == eco & legacySite > 0)
+
+#     if(dim(legacy)[1] > 0) {
+#         for(sgm in 1:length(out_sigmas))
+#         {
+#             for(Rep in 1:nb_rep)
+#             {
+#                 selected_hexas <- hexas %>% 
+#                     filter(ET_Index %in% out_sigmas[[sgm]][[Rep]]$main) %>%
+#                     filter(ecoregion == eco)
+                
+#                 Dist_mt <- st_distance(selected_hexas, legacy)
+                
+#                 dist_dt <- rbind(
+#                     dist_dt,
+#                     data.frame(
+#                         ecoregion = eco,
+#                         sigma = sgm,
+#                         Rep = Rep,
+#                         dist = as.vector(Dist_mt)
+#                     )
+#                 )
+
+#                 dist_min <- rbind(
+#                     dist_min,
+#                     data.frame(
+#                         ecoregion = eco,
+#                         sigma = sgm,
+#                         Rep = Rep,
+#                         dist = apply(Dist_mt, 1, min)
+#                     )
+#                 )
+#             }
+#         }
+#     }
+# }
+
+dist_dt <- readRDS('../dist_dt.RDS')
+dist_min <- readRDS('../dist_min.RDS')
+```
+
+
+```{r plot4,echo=F,fig.width=12,fig.height=12}
+dist_dt %>%
+    mutate(sigma = as.factor(sigma)) %>%
+    ggplot(aes(y = dist, x = sigma, fill = sigma, color = sigma)) +
+        scale_fill_hue(
+            l = 45,
+            labels = c('Unadjusted', paste0('sigma = ', sigmas))
+        ) +
+        scale_color_hue(
+            l = 45,
+            labels = c('Unadjusted', paste0('sigma = ', sigmas))
+        ) +
+        facet_wrap(~ecoregion, scales = 'free') +
+        geom_boxplot(alpha = 0.5) +
+        xlab('') +
+        ylab('Average distance between selected sites and legacy sites (m)') +
+        theme_classic() +
+        theme(
+            legend.position = 'bottom'
+        )
+```
+
+### Distance to the closest legacy site
+
+```{r plot5,echo=F,fig.width=12,fig.height=12}
+dist_min %>%
+    mutate(sigma = as.factor(sigma)) %>%
+    ggplot(aes(y = dist, x = sigma, fill = sigma, color = sigma)) +
+        scale_fill_hue(
+            l = 45,
+            labels = c('Unadjusted', paste0('sigma = ', sigmas))
+        ) +
+        scale_color_hue(
+            l = 45,
+            labels = c('Unadjusted', paste0('sigma = ', sigmas))
+        ) +
+        facet_wrap(~ecoregion, scales = 'free') +
+        geom_boxplot(alpha = 0.5) +
+        xlab('') +
+        ylab('Distance between a selected site and its closest legacy sites (m)') +
+        theme_classic() +
+        theme(
+            legend.position = 'bottom'
+        )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
