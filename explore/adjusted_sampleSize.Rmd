@@ -1,0 +1,404 @@
+---
+title: "Adjusted sample size using legacy site buffer"
+author: Will Vieira
+output:
+    html_document:
+        toc: true
+        toc_float: true
+        toc_depth: 5
+    theme: united
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+EVAL = TRUE
+```
+
+## Setup
+
+```{r libraries,warning=F,message=F}
+library(tidyverse)
+library(ggpubr)
+library(gridtext)
+library(sf)
+library(spatstat)
+library(spsurvey)
+library(MBHdesign)
+
+set.seed(0.0)
+
+hexas <- readRDS('../data/hexa_complete.RDS')
+
+# First filter for hexagons that have at least 20% of sampleable pixel habitats (non NAs)
+hexas <- subset(hexas, propNA <= 0.8)
+
+# calculate p
+hexas$p <- (hexas$hab_prob * hexas$cost_prob) / sum(hexas$hab_prob * hexas$cost_prob)
+
+# remove zeros
+hexas <- subset(hexas, p != 0)
+```
+
+```{r define ecoregions, echo=F, eval = EVAL}
+# filter for ecoregions with at least 10 ecoregion
+eco_sim <- hexas %>%
+    st_drop_geometry() %>%
+    group_by(ecoregion) %>%
+    summarise(nbLegacy = sum(legacySite > 0)) %>%
+    filter(nbLegacy > 10) %>%
+    pull(ecoregion)
+```
+
+
+## Adjust sample size in function of buffer size
+
+```{r sim, warning=FALSE, eval = EVAL}
+sampleProportion <- 0.02 # 2% of available hexagons
+
+buffer_sizes <- seq(0, 35000, 2500)
+legacy_minimum <- c(0, 2, 4)
+
+sampleSize <- data.frame()
+for(eco in eco_sim)
+{
+    hexa_eco <- hexas %>%
+        filter(ecoregion == eco) %>%
+        st_centroid()
+
+    # number of available hexagons to sample
+    nb_hexas <- nrow(hexa_eco)
+    
+    for(lc_min in legacy_minimum)
+    {
+        hexa_legacy <- hexas %>%
+            filter(ecoregion == eco & legacySite > lc_min)
+
+        # initial sample size
+        init_ss <- nb_hexas * sampleProportion
+
+        for(bf_sz in buffer_sizes)
+        {
+            # get buffer around legacy sites
+            legacy_buffer <- hexa_legacy %>%
+                st_buffer(bf_sz) %>%
+                st_union()
+            
+            adj_ss <- hexa_eco %>%
+                st_intersects(legacy_buffer) %>%
+                unlist() %>%
+                sum() * sampleProportion
+
+            sampleSize <- rbind(
+                sampleSize,
+                data.frame(
+                    ecoregion = eco,
+                    legacy_min = lc_min,
+                    bufferSize = bf_sz/1000,
+                    n_adj = init_ss - adj_ss
+                )
+            )            
+        }
+    }
+}
+```
+
+```{r fig1, echo=FALSE,fig.align='center',fig.width=10,fig.height=9, eval = EVAL}
+sampleSize %>%
+    mutate(legacy_min = as.factor(legacy_min)) %>%
+    ggplot(aes(bufferSize, n_adj, color = legacy_min)) +
+        geom_line() +
+        facet_wrap(~ecoregion, scales = 'free_y', ncol = 4) +
+        xlab('Buffer size (Km)') +
+        ylab('Adjusted sample size') +
+        theme_classic() +
+        theme(
+            legend.position = 'bottom'
+        ) +
+        ggtitle('Adjusted sample size after removing hexagons within the buffer around legacy sites') 
+```
+
+
+## GRTS simulation
+
+```{r,echo=FALSE,eval = EVAL}
+# Run GRTS for four different sets
+buffer_sizes <- c(0, 5000, 10000, 20000)
+
+# round adjusted N
+sampleSize <- sampleSize %>%
+    mutate(
+        N = round(n_adj, 0),
+        bufferSize_km = bufferSize * 1000
+    )
+
+# prepare sample frame
+sampleFrame_legacy <- hexas %>%
+    filter(ecoregion %in% eco_sim) %>%
+    mutate(
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        legacy_var = ifelse(legacySite == 0, NA, legacySite),
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+
+
+# coordinates in matrix format for MBHdesign
+coord_mt <- sampleFrame_legacy %>%
+    st_coordinates()
+
+legacySites <- sampleFrame_legacy %>%
+    filter(legacySite > 0) %>%
+    st_coordinates()
+
+# adjust inclusion probability
+for(sgm in 1:length(buffer_sizes))
+{
+    # inclusion probability weighted by N
+    sampleFrame_legacy[[paste0('mdcaty_', sgm)]] <-
+        sum(subset(sampleSize, bufferSize_km == buffer_sizes[sgm] & legacy_min == 0)$N) * sampleFrame_legacy$p/sum(sampleFrame_legacy$p)
+
+    # adjusted inclusion probability in function legacy site and buffer size
+    sampleFrame_legacy[[paste0('pAdj_', sgm)]] <- 
+        MBHdesign::alterInclProbs(
+            legacy.sites = legacySites,
+            potential.sites = coord_mt,
+            inclusion.probs = sampleFrame_legacy[[paste0('mdcaty_', sgm)]],
+            sigma = buffer_sizes[sgm]
+        )
+}
+
+# for buffer size == 0, incl prob does not change
+sampleFrame_legacy$pAdj_1 <- sampleFrame_legacy$mdcaty_1
+
+
+
+# run GRTS
+out_sim <- list()
+for(sgm in 1:length(buffer_sizes))
+{
+    # Sample size by stratum (ecoregion)
+    Stratdsgn_legacy  <- c()
+    for(eco in eco_sim)
+        Stratdsgn_legacy <- append(
+            Stratdsgn_legacy,
+            setNames(
+                subset(sampleSize, legacy_min == 0 & ecoregion == eco & bufferSize_km == buffer_sizes[sgm])$N,
+                paste0('eco_', eco)
+            )
+        )
+
+    # remove ecoregions with sample size == 0
+    Stratdsgn_legacy <- Stratdsgn_legacy[Stratdsgn_legacy > 0]
+    
+    out_sample_legacy <- spsurvey::grts(
+        sframe = sampleFrame_legacy,
+        n_base = Stratdsgn_legacy,
+        stratum_var = 'eco_name',
+        aux_var = paste0('pAdj_', sgm)
+    )
+
+    out_sim[[sgm]] <- out_sample_legacy$sites_base$ET_Index
+}
+```
+
+
+### GRTS simulation for divided ecoregions (1 replication)
+
+Divided ecoregions with at least 10 legacy sites: 100, 101, 103, 217, and 96.
+
+For each ecoregion, we can visualize the selected sites from the GRTS (blue) in function of the legacy sites (red) and the buffer size (sigma; ligth red).
+Note that `sigma = 0` means that neither the inclusion probability nor the sample size (N) was adjusted.
+
+Second figure shows how the habitat types are proportionally distributed between (i) all the hexagons, (ii) only the legacy hexagons, and the selected hexagons depending on the value of sigma.
+
+
+```{r,echo=FALSE,fig.align='center',fig.width=12,fig.height=18,warning=FALSE}
+habProp_f <- function(DT)
+    DT %>%
+        st_drop_geometry() %>%
+        select(starts_with('land_ca_')) %>%
+        summarise(across(everything(), sum, na.rm = TRUE)) %>%
+        pivot_longer(everything(), names_to = 'land')
+
+
+habitat_colors <- c(land_ca_1 = rgb(0, 61, 0, maxColorValue = 255),
+                    land_ca_2 = rgb(148, 156, 112, maxColorValue = 255),
+                    land_ca_5 = rgb(20, 140, 61, maxColorValue = 255),
+                    land_ca_6 = rgb(92, 117, 43, maxColorValue = 255),
+                    land_ca_8 = rgb(179, 138, 51, maxColorValue = 255),
+                    land_ca_10 = rgb(225, 207, 138, maxColorValue = 255),
+                    land_ca_11 = rgb(156, 117, 84, maxColorValue = 255),
+                    land_ca_12 = rgb(186, 212, 143, maxColorValue = 255),
+                    land_ca_13 = rgb(64, 138, 112, maxColorValue = 255),
+                    land_ca_14 = rgb(107, 163, 138, maxColorValue = 255),
+                    land_ca_16 = rgb(168, 171, 174, maxColorValue = 255),
+                    land_ca_21 = '#03045e',
+                    land_ca_22 = '#023e8a',
+                    land_ca_23 = '#0077b6',
+                    land_ca_24 = '#0096c7',
+                    land_ca_25 = '#00b4d8',
+                    land_ca_26 = '#48cae4',
+                    land_ca_27 = '#90e0ef',
+                    land_ca_28 = '#ade8f4',
+                    land_ca_29 = '#caf0f8',
+                    land_ca_30 = '#E6FFFF')
+
+landNames = setNames(
+    c(
+        'All hexagons',
+        'Legacy sites',
+        paste0('Sigma = ', buffer_sizes)
+    ),
+    1:(length(buffer_sizes) + 2)
+)
+        
+
+# keep only divided ecoregions
+eco_sim_div <- grep('N|S', eco_sim, value = TRUE)
+
+for(eco in eco_sim_div)
+{
+    legacy <- hexas %>%
+        filter(ecoregion == eco & legacySite > 0)
+    
+    plotList <- list()
+    sel_ls <- list()
+    for(sgm in 1:length(buffer_sizes))
+    {
+        legacy_buffer <- legacy %>%
+            st_buffer(dist = buffer_sizes[sgm]) %>%
+            st_union()
+        
+        sel_ls[[sgm]] <- hexas %>%
+            filter(ecoregion == eco & ET_Index %in% out_sim[[sgm]])
+
+        plotList[[sgm]] <-
+            ggplot() +
+                geom_sf(data = st_union(subset(hexas, ecoregion == eco)[, 1])) +
+                geom_sf(data = legacy_buffer, fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
+                geom_sf(data = sel_ls[[sgm]], fill = 'darkblue', color = 'darkblue') +
+                geom_sf(data = legacy, fill = rgb(1, 0, 0, 0.4), col = 'transparent') +
+                ggtitle(
+                    paste0(
+                        'Sigma = ', buffer_sizes[sgm],
+                        ';  N = ', subset(sampleSize, legacy_min ==0 & ecoregion == eco & bufferSize_km == buffer_sizes[sgm])$N
+                        )
+                    )
+    }
+    title_text <- paste0(
+        '<br><br>**<span style="font-size:14pt;">Ecoregion = ', eco, '</span>**<br>',
+        '# legacy sites = ', nrow(legacy)        
+    )
+    p1 <- ggarrange(plotlist = plotList, ncol = 2, nrow = 2) %>%
+            annotate_figure(
+                top = gridtext::richtext_grob(title_text)
+                )
+
+
+    # get habitat proportion
+    land_prop <- map_dfr(
+        append(
+            list(
+                subset(hexas, ecoregion == eco),
+                legacy
+            ),
+            sel_ls
+        ),
+        habProp_f,
+        .id = 'sim'
+    )
+    
+    p2 <- ggplot(land_prop, aes(fill = land, x = sim, y = value)) +
+            geom_bar(position = 'fill', stat = 'identity') +
+            scale_fill_manual(values = habitat_colors) +
+            theme_classic() +
+            ylab('Habitat proportion') + 
+            xlab('') +
+            scale_x_discrete(labels = landNames)
+    
+    # plot
+    print(ggarrange(
+        p1,
+        p2,
+        ncol = 1, nrow = 2,
+        heights = c(2, 0.7)
+    ))
+}
+```
+
+
+### GRTS simulation for entire ecoregions (1 replication)
+
+Entire ecoregions with at least 10 legacy sites: 100, 101, 102, 103, 117, 217, 72, 74, 75, 96, 9.
+
+```{r,echo=FALSE,fig.align='center',fig.width=12,fig.height=18,warning=FALSE}
+# keep only divided ecoregions
+for(eco in setdiff(eco_sim, eco_sim_div))
+{
+    legacy <- hexas %>%
+        filter(ecoregion == eco & legacySite > 0)
+    
+    plotList <- list()
+    sel_ls <- list()
+    for(sgm in 1:length(buffer_sizes))
+    {
+        legacy_buffer <- legacy %>%
+            st_buffer(dist = buffer_sizes[sgm]) %>%
+            st_union()
+        
+        sel_ls[[sgm]] <- hexas %>%
+            filter(ecoregion == eco & ET_Index %in% out_sim[[sgm]])
+
+        plotList[[sgm]] <-
+            ggplot() +
+                geom_sf(data = st_union(subset(hexas, ecoregion == eco)[, 1])) +
+                geom_sf(data = legacy_buffer, fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
+                geom_sf(data = sel_ls[[sgm]], fill = 'darkblue', color = 'darkblue') +
+                geom_sf(data = legacy, fill = rgb(1, 0, 0, 0.4), col = 'transparent') +
+                ggtitle(
+                    paste0(
+                        'Sigma = ', buffer_sizes[sgm],
+                        ';  N = ', subset(sampleSize, legacy_min ==0 & ecoregion == eco & bufferSize_km == buffer_sizes[sgm])$N
+                        )
+                    )
+    }
+    title_text <- paste0(
+        '<br><br>**<span style="font-size:14pt;">Ecoregion = ', eco, '</span>**<br>',
+        '# legacy sites = ', nrow(legacy)        
+    )
+    p1 <- ggarrange(plotlist = plotList, ncol = 2, nrow = 2) %>%
+            annotate_figure(
+                top = gridtext::richtext_grob(title_text)
+                )
+
+
+    # get habitat proportion
+    land_prop <- map_dfr(
+        append(
+            list(
+                subset(hexas, ecoregion == eco),
+                legacy
+            ),
+            sel_ls
+        ),
+        habProp_f,
+        .id = 'sim'
+    )
+    
+    p2 <- ggplot(land_prop, aes(fill = land, x = sim, y = value)) +
+            geom_bar(position = 'fill', stat = 'identity') +
+            scale_fill_manual(values = habitat_colors) +
+            theme_classic() +
+            ylab('Habitat proportion') + 
+            xlab('') +
+            scale_x_discrete(labels = landNames)
+    
+    # plot
+    print(ggarrange(
+        p1,
+        p2,
+        ncol = 1, nrow = 2,
+        heights = c(2, 0.7)
+    ))
+}
+```
