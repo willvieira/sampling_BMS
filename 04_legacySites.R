@@ -20,9 +20,22 @@ library(sf)
 # load all info
 districts <- readRDS('data/districts.RDS')
 legacy_sites <- sf::st_read('rawLayers/Registre_LegacyV1_W4.shp') %>%
-                sf::st_transform(sf::st_crs(hexa))
-
-
+                sf::st_transform(
+                    sf::st_crs(
+                        sf::st_read(
+                            grep(
+                                'phab',
+                                list.files(
+                                    'output',
+                                    recursive = TRUE,
+                                    pattern = '.shp',
+                                    full.names = TRUE
+                                ),
+                                value = TRUE
+                            )[1]
+                        )
+                    )
+                )
 
 # Filter points for BMS
 legacy_sites <- subset(legacy_sites, BMS == 'OUI')
