@@ -1,6 +1,7 @@
 ---
 title: "Adjusted sample size using legacy site buffer"
-author: Will Vieira
+author: Willian Vieira
+date: "`r Sys.Date()`"
 output:
     html_document:
         toc: true
@@ -20,7 +21,9 @@ EVAL = TRUE
 ```{r libraries,warning=F,message=F}
 library(tidyverse)
 library(ggpubr)
+library(kableExtra)
 library(gridtext)
+library(ggtext)
 library(sf)
 library(spatstat)
 library(spsurvey)
@@ -400,5 +403,235 @@ for(eco in setdiff(eco_sim, eco_sim_div))
         ncol = 1, nrow = 2,
         heights = c(2, 0.7)
     ))
+}
+```
+
+
+
+## What would be the optimum `sigma` for the subsequent years?
+
+If we set the target to 2% of available hexagons, but could sample only half of it in the first year, how could we use to above approach to difine the remaining N for the next year?
+
+### Run GRTS for year 1
+
+```{r}
+# keep ecoregions with at least 300 available hexagons (N = 6)
+eco_sim <- hexas %>%
+    st_drop_geometry() %>%
+    filter(ecoregion %in% grep('N|S', ecoregion, value = TRUE, invert = TRUE)) %>%
+    group_by(ecoregion) %>%
+    summarise(n = n()) %>% 
+    filter(n > 300) %>%
+    pull(ecoregion)
+
+
+# Sample size by stratum (ecoregion)
+Stratdsgn  <- c()
+for(eco in eco_sim)
+    Stratdsgn <- append(
+        Stratdsgn,
+        setNames(
+            round(nrow(subset(hexas, ecoregion == eco)) * 0.02, 0),
+            paste0('eco_', eco)
+        )
+    )
+
+
+# prepare sample frame
+sampleFrame <- hexas %>%
+    filter(ecoregion %in% eco_sim) %>%
+    mutate(
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        mdcaty  = sum(Stratdsgn) * p/sum(p),
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+    
+# run GRTS    
+out_sample <- spsurvey::grts(
+    sframe = sampleFrame,
+    n_base = Stratdsgn,
+    stratum_var = 'eco_name',
+    aux_var = 'mdcaty'
+)
+```
+
+Now we assume we can only sample half (1%) of the selected hexagons this year:
+
+```{r}
+generate_v <- function(n) {
+    out = rep(0, n)
+    out[sample(1:n, round(n/2, 0))] = 1
+    return(as.factor(out))
+}
+
+# create a new column with 0-1 sampled rows
+selected_hexas <- hexas %>%
+    filter(ET_Index %in% out_sample$sites_base$ET_Index) %>%
+    group_by(ecoregion) %>%
+    mutate(sampled = generate_v(n()))
+```
+
+What would be the optimum buffer size so the adjusted N is closer to half of the sample size?
+
+```{r,echo=FALSE,warning=FALSE}
+buffer_sizes <- seq(13000, 36000, 300)
+
+sampleSize <- data.frame()
+for(eco in eco_sim)
+{
+    hexa_eco <- hexas %>%
+        filter(ecoregion == eco) %>%
+        st_centroid()
+
+    # number of available hexagons to sample
+    nb_hexas <- nrow(hexa_eco)
+
+    hexa_selected <- selected_hexas %>%
+        filter(ecoregion == eco & sampled == 1)
+
+    # initial sample size
+    init_ss <- Stratdsgn[paste0('eco_', eco)]
+
+    for(bf_sz in buffer_sizes)
+    {
+        # get buffer around legacy sites
+        legacy_buffer <- hexa_selected %>%
+            st_buffer(bf_sz) %>%
+            st_union()
+        
+        adj_ss <- hexa_eco %>%
+            st_intersects(legacy_buffer) %>%
+            unlist() %>%
+            sum() * 0.02
+
+        sampleSize <- rbind(
+            sampleSize,
+            data.frame(
+                ecoregion = eco,
+                bufferSize = bf_sz/1000,
+                n_adj = init_ss - adj_ss
+            )
+        )            
+    }
+}
+
+
+selected_N <- selected_hexas %>%
+    st_drop_geometry() %>%
+    filter(sampled == 1) %>%
+    group_by(ecoregion) %>%
+    summarise(n = n())
+
+best_bufferSize <- data.frame()
+for(eco in eco_sim)
+{
+    expected_n <- unname(Stratdsgn[paste0('eco_', eco)] - subset(selected_N, ecoregion == eco)$n)
+
+    better_bs <- subset(sampleSize, ecoregion == eco)$bufferSize[which.min(abs(expected_n - subset(sampleSize, ecoregion == eco)$n_adj))]
+
+    best_bufferSize <- rbind(
+        best_bufferSize,
+        data.frame(
+            ecoregion = eco,
+            exp_n = expected_n,
+            best_bs = better_bs
+        )
+    )
+}
+
+best_bufferSize %>%
+    mutate(
+        Ecoregion = ecoregion,
+        `Optimum buffer size (Km)` = best_bs
+    ) %>%
+    select(4:5) %>%
+    kbl() %>%
+        kable_paper("hover", full_width = F)
+
+```
+
+### Run GRTS for year 2
+
+The sampled hexagons (1%) of year 1 now become the legacy site for the year 2. We will use the average of the optimum buffer size among the ecoregions (`r round(mean(best_bufferSize$best_bs), 2)` Km) to reduce `N` and concentrate new hexagons in regions not yet covered.
+
+```{r, echo=FALSE,warning=FALSE}
+# Sample size by stratum (ecoregion)
+Stratdsgn  <- c()
+for(eco in eco_sim)
+    Stratdsgn <- append(
+        Stratdsgn,
+        setNames(
+            round(subset(sampleSize, ecoregion == eco & bufferSize == subset(best_bufferSize, ecoregion == eco)$best_bs)$n_adj, 0),
+            paste0('eco_', eco)
+        )
+    )
+
+# prepare sample frame
+sampleFrame <- hexas %>%
+    filter(ecoregion %in% eco_sim) %>%
+    mutate(    
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        mdcaty  = sum(Stratdsgn) * p/sum(p),
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+    
+# coordinates in matrix format for MBHdesign
+coord_mt <- sampleFrame %>%
+    st_coordinates()
+
+legacySites <- sampleFrame %>%
+    filter(ET_Index %in% subset(selected_hexas, sampled == 1)$ET_Index) %>%
+    st_coordinates()
+
+
+sampleFrame$adj_p <- MBHdesign::alterInclProbs(
+    legacy.sites = legacySites,
+    potential.sites = coord_mt,
+    inclusion.probs = sampleFrame$mdcaty,
+    sigma = mean(best_bufferSize$best_bs) * 1000
+)
+
+# run GRTS    
+out_sample <- spsurvey::grts(
+    sframe = sampleFrame,
+    n_base = Stratdsgn,
+    stratum_var = 'eco_name',
+    aux_var = 'adj_p'
+)
+```
+
+
+```{r,echo=FALSE,fig.align='center',fig.width=12,fig.height=7,warning=FALSE}
+for(eco in eco_sim)
+{
+    eco_limits <- hexas %>%
+        filter(ecoregion == eco) %>%
+        st_union()
+    
+    p1 <- ggplot() +
+        geom_sf(data = eco_limits) +
+        geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
+        geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 1), fill = 'red', col = 'red') +
+        ggtitle("**<span style='color:red'>Sampled</span>** (1%) and **<span style='color:lightblue'>non-sampled</span>** (1%) hexagons year 1") +
+        theme(plot.title = element_markdown())
+
+    p2 <- ggplot() +
+        geom_sf(data = eco_limits) +
+        geom_sf(data = st_union(st_buffer(subset(selected_hexas, ecoregion == eco & sampled == 1), dist = mean(best_bufferSize$best_bs) * 1000)), fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
+        geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
+        geom_sf(data = subset(hexas, ecoregion == eco  & ET_Index %in% out_sample$sites_base$ET_Index), fill = 'blue', col = 'blue') +
+        ggtitle("**<span style='color:blue;'>Selected</span>** (1%) hexagons year 2") +
+        theme(plot.title = element_markdown())
+
+    print(
+        ggarrange(p1, p2, nrow = 1) %>%
+            annotate_figure(
+                top = gridtext::richtext_grob(
+                    paste0(
+                        '<br><br>**<span style="font-size:14pt;">Ecoregion = ', eco, '</span>**'
+                    )        
+                )
+            )
+    )
 }
 ```
