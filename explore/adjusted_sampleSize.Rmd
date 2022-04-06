@@ -474,7 +474,7 @@ selected_hexas <- hexas %>%
 What would be the optimum buffer size so the adjusted N is closer to half of the sample size?
 
 ```{r,echo=FALSE,warning=FALSE}
-buffer_sizes <- seq(13000, 36000, 300)
+buffer_sizes <- c(10000, seq(13000, 36000, 300))
 
 sampleSize <- data.frame()
 for(eco in eco_sim)
@@ -552,9 +552,15 @@ best_bufferSize %>%
 
 ### Run GRTS for year 2
 
-The sampled hexagons (1%) of year 1 now become the legacy site for the year 2. We will use the average of the optimum buffer size among the ecoregions (`r round(mean(best_bufferSize$best_bs), 2)` Km) to reduce `N` and concentrate new hexagons in regions not yet covered.
+The sampled hexagons (1%) of year 1 now become the legacy site for the year 2. 
+To select the hexagons for the second year, we have to adjust the sample size ($\sigma_{\text{adj N}}$) and the inclusion probability ($\sigma_{\text{adj p}}$) in function of a defined buffer size ($\sigma$).
+We will compare the average of the optimum buffer size among the ecoregions (`r round(mean(best_bufferSize$best_bs), 1)` Km) with the predefined 10 Km.
+
 
 ```{r, echo=FALSE,warning=FALSE}
+
+# Optimum sigma
+########################################################
 # Sample size by stratum (ecoregion)
 Stratdsgn  <- c()
 for(eco in eco_sim)
@@ -598,10 +604,75 @@ out_sample <- spsurvey::grts(
     stratum_var = 'eco_name',
     aux_var = 'adj_p'
 )
+
+# Optimum sigma (probability adjusted swith sigma 1000)
+########################################################
+
+sampleFrame$adj_p <- MBHdesign::alterInclProbs(
+    legacy.sites = legacySites,
+    potential.sites = coord_mt,
+    inclusion.probs = sampleFrame$mdcaty,
+    sigma = 10000
+)
+
+# run GRTS    
+out_sample_adj10000 <- spsurvey::grts(
+    sframe = sampleFrame,
+    n_base = Stratdsgn,
+    stratum_var = 'eco_name',
+    aux_var = 'adj_p'
+)
+
+# Sigma = 10000
+########################################################
+# Sample size by stratum (ecoregion)
+Stratdsgn  <- c()
+for(eco in eco_sim)
+    Stratdsgn <- append(
+        Stratdsgn,
+        setNames(
+            round(subset(sampleSize, ecoregion == eco & bufferSize == 10)$n_adj, 0),
+            paste0('eco_', eco)
+        )
+    )
+
+# prepare sample frame
+sampleFrame <- hexas %>%
+    filter(ecoregion %in% eco_sim) %>%
+    mutate(    
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        mdcaty  = sum(Stratdsgn) * p/sum(p),
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+    
+# coordinates in matrix format for MBHdesign
+coord_mt <- sampleFrame %>%
+    st_coordinates()
+
+legacySites <- sampleFrame %>%
+    filter(ET_Index %in% subset(selected_hexas, sampled == 1)$ET_Index) %>%
+    st_coordinates()
+
+
+sampleFrame$adj_p <- MBHdesign::alterInclProbs(
+    legacy.sites = legacySites,
+    potential.sites = coord_mt,
+    inclusion.probs = sampleFrame$mdcaty,
+    sigma = 10000
+)
+
+# run GRTS    
+out_sample_10000 <- spsurvey::grts(
+    sframe = sampleFrame,
+    n_base = Stratdsgn,
+    stratum_var = 'eco_name',
+    aux_var = 'adj_p'
+)
+
 ```
 
 
-```{r,echo=FALSE,fig.align='center',fig.width=12,fig.height=7,warning=FALSE}
+```{r,echo=FALSE,fig.align='center',fig.width=13,fig.height=19,fig.fullwidth=TRUE,warning=FALSE}
 for(eco in eco_sim)
 {
     eco_limits <- hexas %>%
@@ -612,26 +683,151 @@ for(eco in eco_sim)
         geom_sf(data = eco_limits) +
         geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
         geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 1), fill = 'red', col = 'red') +
-        ggtitle("**<span style='color:red'>Sampled</span>** (1%) and **<span style='color:lightblue'>non-sampled</span>** (1%) hexagons year 1") +
+        ggtitle(paste0("**<span style='color:red'>Sampled</span>** (", nrow(subset(selected_hexas, ecoregion == eco & sampled == 0)), ") and **<span style='color:lightblue'>non-sampled</span>** (", nrow(subset(selected_hexas, ecoregion == eco & sampled == 1)), ") hexagons in year 1")) +
         theme(plot.title = element_markdown())
 
     p2 <- ggplot() +
         geom_sf(data = eco_limits) +
+        geom_sf(data = st_union(st_buffer(subset(selected_hexas, ecoregion == eco & sampled == 1), dist = 10000)), fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
+        geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
+        geom_sf(data = subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_10000$sites_base$ET_Index), fill = 'blue', col = 'blue') +
+        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_10000$sites_base$ET_Index)), ") hexagons year 2 (*σ<sub>adj N</sub>* = 10; *σ<sub>adj p</sub>* = 10)")) +
+        theme(plot.title = element_markdown())
+
+    p3 <- ggplot() +
+        geom_sf(data = eco_limits) +
         geom_sf(data = st_union(st_buffer(subset(selected_hexas, ecoregion == eco & sampled == 1), dist = mean(best_bufferSize$best_bs) * 1000)), fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
         geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
         geom_sf(data = subset(hexas, ecoregion == eco  & ET_Index %in% out_sample$sites_base$ET_Index), fill = 'blue', col = 'blue') +
-        ggtitle("**<span style='color:blue;'>Selected</span>** (1%) hexagons year 2") +
+        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample$sites_base$ET_Index)), ") hexagons year 2 (*σ<sub>adj N</sub>* = ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>* = ", round(mean(best_bufferSize$best_bs), 1), ")")) +
         theme(plot.title = element_markdown())
 
-    print(
-        ggarrange(p1, p2, nrow = 1) %>%
-            annotate_figure(
-                top = gridtext::richtext_grob(
-                    paste0(
-                        '<br><br>**<span style="font-size:14pt;">Ecoregion = ', eco, '</span>**'
-                    )        
+    p4 <- ggplot() +
+        geom_sf(data = eco_limits) +
+        geom_sf(data = st_union(st_buffer(subset(selected_hexas, ecoregion == eco & sampled == 1), dist = mean(best_bufferSize$best_bs) * 1000)), fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
+        geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
+        geom_sf(data = subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_adj10000$sites_base$ET_Index), fill = 'blue', col = 'blue') +
+        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_adj10000$sites_base$ET_Index)), ") hexagons year 2 (*σ<sub>adj N</sub>* = ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>* = 10)")) +
+        theme(plot.title = element_markdown())
+
+
+    # prepare data for boxplot
+    legacyS <- subset(selected_hexas, ecoregion == eco & sampled == 1)
+    legacyNS <- subset(selected_hexas, ecoregion == eco & sampled == 0)
+
+    dist_dt <- data.frame(
+        sim = "<span style='color:lightblue'>non-sampled</span>",
+        ref = 'S',
+        dist = apply(
+            st_distance(
+                legacyS,
+                legacyNS
+            ),
+            1, min
+        )
+    )
+
+    for(Ref in c('S', 'NS')) {
+        dist_dt <- rbind(
+            dist_dt,
+            data.frame(
+                sim = "<span style='color:blue;'>Selected</span><br>(*σ<sub>adj N</sub>*:10; *σ<sub>adj p</sub>*: 10)",
+                ref = Ref,
+                dist = apply(
+                    st_distance(
+                        get(paste0('legacy', Ref)),
+                        subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_10000$sites_base$ET_Index)
+                    ),
+                    1, min
                 )
             )
+        )
+    }
+
+    for(Ref in c('S', 'NS')) {
+        dist_dt <- rbind(
+            dist_dt, 
+            data.frame(
+                sim = paste0("<span style='color:blue;'>Selected</span><br>(*σ<sub>adj N</sub>*: ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>*: ", round(mean(best_bufferSize$best_bs), 1), ")"),
+                ref = Ref,
+                dist = apply(
+                    st_distance(
+                        get(paste0('legacy', Ref)),
+                        subset(hexas, ecoregion == eco  & ET_Index %in% out_sample$sites_base$ET_Index)
+                    ),
+                    1, min
+                )
+            )
+        )
+    }
+    
+    for(Ref in c('S', 'NS')) {
+        dist_dt <- rbind(
+                dist_dt, 
+                data.frame(
+                    sim = paste0("<span style='color:blue;'>Selected</span><br>(*σ<sub>adj N</sub>*: ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>*: 10)"),
+                    ref = Ref,
+                    dist = apply(
+                        st_distance(
+                            get(paste0('legacy', Ref)),
+                            subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_adj10000$sites_base$ET_Index)
+                        ),
+                        1, min
+                    )
+                )
+            )
+    }
+    
+    p5 <- dist_dt %>%
+        filter(ref == 'S') %>% 
+        mutate(
+            sim = factor(sim, levels = unique(sim))
+        ) %>%
+        ggplot(aes(x = sim, y = dist/1000)) +
+            geom_boxplot(fill = c('lightblue', rep('blue', 3)), alpha = c(.9, rep(0.8, 3))) +
+            labs(
+                title = "Minimum distance between **simulation** hexagons and <br>**<span style='color:red'>Sampled</span>** hexagons"
+            ) +
+            theme(
+                plot.margin = margin(2, 0, 2, 0, "cm"),
+                plot.title = element_markdown(),
+                axis.text.x = element_markdown(size = 10)
+            ) +
+            xlab('Simulation') + ylab('Distance (Km)')
+
+    p6 <- dist_dt %>%
+        filter(ref == 'NS') %>%
+        mutate(
+            sim = factor(sim, levels = unique(sim))
+        ) %>%
+        ggplot(aes(x = sim, y = dist/1000)) +
+            geom_boxplot(fill = rep('blue', 3), alpha = rep(0.8, 3)) +
+            labs(
+                title = "Minimum distance between **simulation** hexagons and <br>**<span style='color:lightblue'>non-sampled</span>** hexagons"
+            ) +
+            theme(
+                plot.margin = margin(2, 0, 2, 0, "cm"),
+                plot.title = element_markdown(),
+                axis.text.x = element_markdown(size = 10)
+            ) +
+            xlab('Simulation') + ylab('')
+
+
+
+    print(
+        ggarrange(
+            ggarrange(p1, p2, p3, p4, nrow = 2, ncol = 2) %>%
+                annotate_figure(
+                    top = gridtext::richtext_grob(
+                        paste0(
+                            '<br><br>**<span style="font-size:14pt;">Ecoregion = ', eco, '</span>**'
+                        )
+                    )
+                ),
+            ggarrange(p5, p6, nrow = 1, widths = c(1.05, 0.95)),
+            nrow = 2,
+            heights = c(2, .8)
+        )   
     )
 }
 ```
