@@ -4,271 +4,192 @@
 ### December 9, 2020
 ########################################################################
 
-
+library(raster)
+library(exactextractr)
 library(tidyverse)
 library(spatstat)
 library(sf)
+library(spsurvey)
+library(MBHdesign)
+
+set.seed(0.0)
 
 
-hexas <- readRDS('data/hexa_complete.RDS')
 
+# parameters
 
+    # Maximum proportion of NA pixels (non-habitat) in a hexagon
+    # if 0.8, it means an hexagon has to have at least 20% of habitat pixels
+    prop_na = 0.8
 
-# calculate the inclusion probability p for each hexagon
+    # Percentage of hexagons to cover a region
+    sample_effort = 0.02
 
-    # First filter for hexagons that have at least 50% of samplable pixel habitats within the hexagon (no NAs)
-    hexas <- subset(hexas, propNA <= 0.8)
+    # Number of replications when running the GRTS
+    nb_rep = 15
+
+    # Ecoregions
+    eco_sim <- c(
+        '7', '28', '30', '31',
+        '46', '47', '48', '49',
+        '73', '77', '78', '86',
+        '72', '74', '75', '76',
+        '96', #'96N', '96S',
+        '99',
+        '100', #'100N', '100S',
+        '101', #'101N', '101S',
+        '102',
+        '103', #'103N', '103S',
+        '117',
+        '216',
+        '217'#, '217N', '217S'
+    )
     
-    # calculate p
-    hexas$p <- (hexas$hab_prob * hexas$cost_prob) / sum(hexas$hab_prob * hexas$cost_prob)
-    
-    # remove zeros
-    hexas <- subset(hexas, p != 0)
-    
-    # sequencial row names
-    row.names(hexas) <- seq(1, nrow(hexas))
+    # Buffer size (in Km) to adjust sample size given nb of legacy sites
+    bufferSize_N = 18
+
+    # Buffer size (in Km) to adjust inclusion probability around legacy sites
+    bufferSize_p = 10
+
+    # Distance between SSU centroid (in meters)
+    ssu_dist = 194
 
 #
 
 
 
+# Prepare hexagons
 
-# Get sample size for each ecoregion
+    hexas <- readRDS('data/hexa_complete.RDS') %>%
+        filter(propNA <= prop_na) %>%
+        filter(ecoregion %in% eco_sim) %>%
+        mutate(
+            p = (hab_prob * cost_prob) / sum(hab_prob * cost_prob)
+        ) %>%
+        filter(p != 0)
 
-    sampleSize <- readRDS('data/nbHexa_ecoregion.RDS')
+#
 
-    # Sample 2% of hexagons available hexagons
-    N_tmp <- sampleSize$hexagonProp80 * 0.02
-    
-    # Sample size in function of size proportion between ecoregions
-    eco_ignore <- which(sampleSize$ecoregion %in% gsub('N', '', grep('N', sampleSize$ecoregion, value = TRUE)))
-    totalN <- sum(N_tmp[-eco_ignore])
-    sampleSize$N <- unclass(round(totalN * sampleSize$sizeProp, 0))
-    
-    # Remove ecoregions with N == 0
-    sampleSize <- subset(sampleSize, N != 0)
-    
-    # Total sample size
-    N <- sum(sampleSize$N[-eco_ignore])
+
+
+# legacy sites
+
+    # load data
+    legacySites <- read_csv('data/SitesLegacy_GRTS20220314.csv') %>%
+        group_by(Hexagone_Num) %>%
+        summarise(legacyNew = n()) %>%
+        rename(ET_Index = Hexagone_Num)
+
+    # merge to hexagons
+    hexas <- hexas %>%
+        left_join(legacySites) %>%
+        mutate(
+            legacyNew = replace_na(legacyNew, 0),
+            legacy = legacySite + legacyNew
+        )
+
+#
+
+
+
+# Calculate sample size given number of hexagons and legacy sites
+
+    get_sampleSize <- function(eco, hx, bf_N, sample_e)
+    {
+        hexa_eco <- hx %>%
+            filter(ecoregion == eco) %>%
+            st_centroid()
+
+        hexa_legacy_bf <- hexa_eco %>%
+            filter(legacy > 0) %>%
+            st_buffer(bf_N * 1000) %>%
+            st_union()
+
+        nbHexas_legacy <- hexa_eco %>%
+            st_intersects(hexa_legacy_bf) %>%
+            unlist() %>%
+            sum()
+        
+        round((nrow(hexa_eco) - nbHexas_legacy) * sample_e, 0)
+    }
+
+
+    sampleSize <- map_dbl(
+        setNames(eco_sim, paste0('eco_', eco_sim)),
+        get_sampleSize,
+        hx = hexas,
+        bf_N = bufferSize_N,
+        sample_e = sample_effort
+    )
 
 #
  
-
-
-## Inclusion probability depening on simulation
-
-    ## SIMULATION 2:
-    # Weight p according to the number of legacy site
-    we = function(legacySite, lower, upper, mid, beta)
-    {
-        if(legacySite == 0) {
-            return( 1 )
-        }else{
-            return( lower + ((upper - lower) / (1 + exp(-beta * (legacySite - mid)))) )
-        }
-    } 
-
-    # weight = 3
-    hexas$p_sim2 <- hexas$p * sapply(hexas$legacySite, we, lower = 1, upper = 3, mid = 4, beta = 0.9)
-    hexas$p_sim2 <- hexas$p_sim2/sum(hexas$p_sim2)
-
-#
-
-
 
 
 # GRTS simulations
 
-    # number of replications for each simulation
-    nb_rep <- 1
+    # Sample size by stratum (ecoregion)
+    Stratdsgn  <- sampleSize[sampleSize > 0]
 
-    # Ecoregions
-    eco_sim <- c('7', '28', '30', '31', '46', '47', '48', '49', '73', '77', '78', '86',
-                 '72', '74', '75', '76',
-                 '96N', #'96', '96S',
-                 '99',
-                 '100N', #'100', '100S',
-                 '101N', #'101', '101S',
-                 '102',
-                 '103N', #'103', '103S',
-                 '117',
-                 '216',
-                 '217N')#, '217', '217S')
-    
+    # Prepare sample frame
+    sampleFrame <- hexas %>%
+        mutate(    
+            eco_name = paste0('eco_', ecoregion), # to match design name
+            mdcaty  = sum(Stratdsgn) * p/sum(p),
+            geometry = sf::st_geometry(sf::st_centroid(geometry))
+        )
+        
+    # Coordinates of all hexagons in matrix format for MBHdesign
+    coord_mt <- sampleFrame %>%
+        st_coordinates()
 
-    # Design list
-    overSampleSize <- 0.2
- 
-    Stratdsgn <- list()
-    for(eco in eco_sim)
-        Stratdsgn[[paste0('eco_', eco)]] <- list(panel = c(PanelOne = subset(sampleSize, ecoregion == eco)$N), over = round(subset(sampleSize, ecoregion == eco)$N * overSampleSize, 0), seltype = 'Continuous')
+    # Coordinates of legacy hexagons
+    legacySites <- sampleFrame %>%
+        filter(legacy > 0) %>%
+        st_coordinates()
 
-    # Sample frame for specific ecoregions
-    sample_frame <- subset(hexas, ecoregion %in% eco_sim)
+    sampleFrame$adj_p <- MBHdesign::alterInclProbs(
+        legacy.sites = legacySites,
+        potential.sites = coord_mt,
+        inclusion.probs = sampleFrame$mdcaty,
+        sigma = bufferSize_p * 1000
+    )
 
-    # Get x and y from centroid of hexagon
-    sample_frame$geometry <- sample_frame %>% sf::st_centroid() %>% sf::st_geometry()
-    sample_frame[c('X', 'Y')] <- sf::st_coordinates(sample_frame)
-    
-    # rename ecoregion name to match design name
-    sample_frame$eco_name <- paste0('eco_', sample_frame$ecoregion)
-
-    # Get only attributes table (remove spatial information)
-    attframe <- sf::st_drop_geometry(sample_frame)
-
-
-
-    # RUN GRTS
-    ################################################
-
-    attframe$mdcaty <- sum(subset(sampleSize, ecoregion %in% eco_sim)$N) * attframe$p/sum(attframe$p)
-
-    set.seed(2)
-    out_sim <- list()
-    for (i in 1:nb_rep)
+    # run GRTS    
+    grts_out <- list()
+    for(Rep in 1:nb_rep)
     {
-        out_sample <- spsurvey::grts(design = Stratdsgn,
-                                            DesignID = "ET_ID",
-                                            type.frame = "finite",
-                                            src.frame = "att.frame",
-                                            att.frame = attframe,
-                                            xcoord = 'X',
-                                            ycoord = 'Y',
-                                            stratum = "eco_name",
-                                            mdcaty = "mdcaty",
-                                            shapefile = FALSE,
-                                            out.shape = "Cost_design")
+        out_sample <- spsurvey::grts(
+            sframe = sampleFrame,
+            n_base = Stratdsgn,
+            stratum_var = 'eco_name',
+            aux_var = 'adj_p'
+        )
 
-        out_sim[[i]] <- setNames(out_sample$ET_Index, out_sample$panel)
+        grts_out[[paste0('Rep_', Rep)]] <- out_sample$sites_base$ET_Index
     }
 
-    # save output
-    hexas_sample <- subset(hexas, ecoregion %in% eco_sim)
-
-    for(i in 1:nb_rep)
-    {
-        hexas_sample[[paste0('rep', i, '_over')]] <- hexas_sample[[paste0('rep', i, '_main')]] <- rep(0, nrow(hexas_sample))
-        
-        # assign 1 to the selected hexagons (main sample)
-        hexas_sample[[paste0('rep', i, '_main')]][which(hexas_sample$ET_Index %in% out_sim[[i]][which(names(out_sim[[i]]) == 'PanelOne')])] <- 1
-
-        # assign 1 to the selected hexagons (over sample)
-        hexas_sample[[paste0('rep', i, '_over')]][which(hexas_sample$ET_Index %in% out_sim[[i]][which(names(out_sim[[i]]) == 'OverSamp')])] <- 1
-
-    }
-
-    # TODO FIX REPRODUCIBILITY
-    write_sf(hexas_sample, '../../ownCloud/BMS_Bruno/sample/sample_hypothese2.shp')
-
-
-    # SAVE OUTPUT V2
-    hexas %>%
-        filter(ET_Index %in% out_sim[[1]]) %>%
-        mutate(
-            panel = if_else(ET_Index %in% out_sim[[1]][names(out_sim[[1]]) == 'PanelOne'], 'main', 'over')
-        ) %>%
-        write_sf('../../ownCloud/BMS_Bruno/sample/sample_quebec.shp')
-        
 #
 
 
 
+# Select cheapest replication
 
-#   # SELET THE BEST REPETITION BASED ON THE LOWEST SAMPLING COST
-    ################################################
-
-    cheapest_rep <- hexas_sample %>%
-        st_drop_geometry() %>%
-        select(ecoregion, ET_Index, costSum, starts_with('rep')) %>%
-        pivot_longer(
-            cols = starts_with('rep'),
-            names_to = 'Rep',
-            values_to = 'select'
-        ) %>%
-        mutate(rep_total = parse_number(Rep)) %>%
-        group_by(rep_total) %>%
-        filter(select == 1) %>%
-        summarise(costTotal = sum(costSum)) %>%
-        filter(costTotal == min(costTotal)) %>%
-        select(rep_total) %>%
-        as.numeric()
+    cheapest_rep <- map_df(
+        grts_out,
+        ~ hexas %>%
+            st_drop_geometry() %>%
+            filter(ET_Index %in% .x) %>%
+            summarise(totalCost = sum(costSum))
+    ) %>%
+    pull(totalCost) %>%
+    which.min()
 
 
+    selected_hexas <- hexas %>%
+        filter(ET_Index %in% grts_out[[cheapest_rep]])
 
-
-    # SELECT SECONDATY SAMPLE UNITS WITHIN HEXAGON
-    ################################################
-
-    hexas_sample <- read_sf('../../ownCloud/BMS_Bruno/sample/sample_hypothese2.shp')
-    
-
-    # Get cheapest repetition only 
-    selected_hexas <- hexas_sample[which(
-                        hexas_sample[[paste0('rep', cheapest_rep, '_main')]] == 1 |
-                        hexas_sample[[paste0('rep', cheapest_rep, '_over')]] == 1), ]
-
-
-    
-    # FIRST APPROACH:
-    # Complete random points (independant of habitat and availability of the unit)
-    ########################
-    
-    out_ls <- list(); Count = 1
-    for(eco in unique(hexas_sample$ecoregion))
-    {
-        hexas_eco <- subset(selected_hexas, ecoregion == eco)
-
-        for(sim in c('main', 'over'))
-        {
-            
-            hexas_eco_sim <- hexas_eco[which(hexas_eco[[paste0('rep', cheapest_rep, '_', sim)]] == 1), ]
-
-            for(hex in 1:nrow(hexas_eco_sim))
-            {
-                hex_eco_sim <- hexas_eco_sim[hex, ]
-                point_grid <- hex_eco_sim %>%
-                    st_make_grid(cellsize = 300, what = 'centers') %>%
-                    st_intersection(hex_eco_sim)
-
-                point_ID <- 1:length(point_grid)
-                for(Rep in 1:10)
-                {
-                    # Sample first point
-                    sample_1 <- sample(point_ID, size = 1)
-
-                    # Remove all points around the already sampled point
-                    # using a buffer of 1200 x 1200 meters
-                    toKeep <- !st_intersects(point_grid, st_buffer(point_grid[sample_1], dist = 855), sparse = FALSE)
-                    sample_2 <- sample(point_ID[toKeep], size = 1)
-                    
-                    sample_grid <- point_grid[c(sample_1, sample_2)]
-                    
-                    # add attribute table
-                    att_df <- data.frame(
-                        ecoregion = eco,
-                        ET_Index = hexas_eco_sim$ET_Index[hex],
-                        simulation = sim,
-                        repetition = Rep,
-                        SSU_Index = c(sample_1, sample_2),
-                        point = 1:2
-                    )
-
-                    out_ls[[Count]] <- st_sf(att_df, geometry = sample_grid)
-                    Count = Count + 1
-                }
-            }
-        }
-    }
-    
-    out_point <- do.call(rbind, out_ls)
-
-    out_point %>%
-        st_drop_geometry() %>%
-        group_by(ET_Index, point) %>%
-        summarise(
-            tb = sum(table(SSU_Index) > 1)
-        ) %>%
-        ggplot(aes(tb)) + geom_histogram()
+#
 
 
     write_sf(out_point, '../../ownCloud/BMS_Bruno/sample/SSU.shp')
