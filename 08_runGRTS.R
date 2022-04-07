@@ -52,7 +52,7 @@ set.seed(0.0)
     bufferSize_p = 10
 
     # Distance between SSU centroid (in meters)
-    ssu_dist = 194
+    ssu_dist = 294
 
 #
 
