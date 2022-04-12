@@ -221,7 +221,7 @@ set.seed(0.0)
             hexas$ET_Index[x][which.max(hexas$p[x])]
     )
     
-    selected_extra <- subset(hexas, ET_Index %in% best_p)
+    selected_extra <- hexas[match(best_p, hexas$ET_Index), ]
 
 #
 
