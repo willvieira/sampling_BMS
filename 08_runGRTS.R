@@ -25,6 +25,10 @@ set.seed(0.0)
     # Percentage of hexagons to cover a region
     sample_effort = 0.02
 
+    # Total sample size for SSU (Main + Over)
+    # It must be a even number
+    ssu_N = 4
+
     # Number of replications when running the GRTS
     nb_rep = 15
 
@@ -192,109 +196,221 @@ set.seed(0.0)
 #
 
 
-    write_sf(out_point, '../../ownCloud/BMS_Bruno/sample/SSU.shp')
 
+# Select SSU
 
-    # SECOND APPROACH:
-    # Calculate probability following habitat proportion from ecoregion AND
-    # Filter for squares with at least o
+    # Calculate probability following habitat proportion from ecoregion
     ########################
-
-    library(raster)
-    library(exactextractr)
 
     land_ca <- raster("data/landcover_ca_30m.tif")
     prev_all <- readRDS('data/prev_all.RDS')    
 
-    # Function to return squares polygons for a specific hexagon
-    # Return sf object with square polygons for a specific hexagon
-    get_squares <- function(hexa, cellSize, roads_bf)
+    # function to generate SSU points (from: https://github.com/dhope/BASSr)
+    genSSU <- function(h, spacing)
     {
-        # Get grid centroid of cellSize
-        hex_cent <- hexa %>%
-            st_make_grid(cellsize = cellSize, what = 'centers')
-    
-        # Get squares around grid centroid and filter the hexagons
-        # in which the centroid are inside the hexagon
-        hex_squares <- hexa %>%
-            st_make_grid(cellsize = cellSize, square = TRUE)
-        hex_squares <- hex_squares[st_intersects(hex_cent, hexa, sparse = FALSE), ]
+        ch <- as_tibble(st_coordinates(h))
+        top_point <- ch[which.max(ch$Y),]
+        bottom_point <- ch[which.min(ch$Y),]
+        gridsize <- 2*floor(abs(top_point$Y-bottom_point$Y)/spacing)+3
+        rowAngle <- tanh((top_point$X-bottom_point$X)/(top_point$Y-bottom_point$Y))
 
-        # Check if the squares have roads inside
-        if(hexa$haveRoads == 1)
-        {
-            hvRoads <- st_intersects(hex_squares, st_crop(roads_bf, hexa), sparse = FALSE)
-            hvRoads <- apply(hvRoads, 1, function(x) ifelse(sum(x) > 0, 1, 0))
-        }else{
-            hvRoads <- rep(0, length(hex_squares))
+
+        cent <- st_centroid(h) %>%
+            bind_cols(as_tibble(st_coordinates(.))) %>%
+            st_drop_geometry %>%
+            dplyr::select(ET_Index, X, Y)
+
+
+        genRow <- function(cX, cY, sp,...){
+            tibble(rowid = seq(-gridsize,gridsize)) %>%
+            mutate(X = sin(60*pi/180+rowAngle) *sp*rowid + {{cX}},
+                    Y = cos(60*pi/180+rowAngle) *sp*rowid  + {{cY}})
         }
-        
-        # squares with attribute table
-        hex_squares <- st_sf(
-            data.frame(
-                ecoregion = hexa$ecoregion,
-                ET_Index = hexa$ET_Index,
-                SSU_Index = 1:length(hex_squares),
-                haveRoads = hvRoads
-            ),
-            geometry = hex_squares)
-    }
 
-
-    # Function to calculate inclusion probability for each square within hexagon
-    # Return a vector of inclusion probability for each square
-    calc_habProb <- function(squares, landUse, incProb)
-    {
-        # extract pixels for each square
-        hab_pixels <- exactextractr::exact_extract(landUse, squares, progress = FALSE)
-        
-        # get frequence of each class of habitat
-        count_hab <- Map(
-                    function(x, y) {
-                        freq <- table(x$value)
-                        if(length(freq) > 0) {
-                            data.frame(freq, ecoregion = y)
-                        }else{
-                            NA
-                        }
-                    },
-                    x = hab_pixels,
-                    y = squares$ecoregion
-                )
-        
-
-        # merge with inclusion probability
-        # and calculate inclusion probbaility for each NON empty square
-        squares$incl_prob <- unlist(
-                lapply(
-                    count_hab,
-                    function(x) {
-                        if(is.data.frame(x)) {
-                            mg_df <- merge(x, subset(incProb, ID_ecoregion == x$ecoregion[1]), by.x = "Var1", by.y = "code" , all.x = TRUE)
-                            sum(mg_df$Freq * mg_df$incl_prob)
-                        }else{
-                            NA
-                        }
-                    }
-                )
-            )
-
-        squares <- squares %>%
-            st_drop_geometry() %>%
-            group_by(ET_Index) %>%
+        centroids <- tibble(crowid=seq(-gridsize,gridsize)) %>%
+            mutate(cY = cos(rowAngle) *spacing*crowid + cent$Y,
+                #spacing/2*crowid + cent$Y,
+                cX =  sin(rowAngle) *spacing*crowid + cent$X) %>%
+            #cent$X + crowid* sqrt(spacing**2-(spacing/2)**2)) %>%
+            rowwise() %>%
+            mutate(row = list(genRow(cX = cX,cY = cY,sp = spacing))) %>%
+            unnest(row) %>%
+            dplyr::select(X,Y) %>%
+            st_as_sf(coords = c("X", "Y"), crs = st_crs(h)) %>%
+            st_filter(h) %>%
             mutate(
-                inclProb = incl_prob/sum(incl_prob, na.rm = TRUE)
+                ET_Index = h$ET_Index,
+                ecoregion = h$ecoregion,
+                ssuID = row_number()
             )
-        
-        return(squares$inclProb)
+        return(centroids)
     }
 
-    # Function to sample SSU within selected hexagons
-    sample_SSU <- function(hex_cent, repetitions)
+
+    # function to sample SSU
+    sample_SSU <- function(ssuid, prob, geom, filtered, ssuDist, N)
     {
-        # hex_cent index to later samples
-        point_ID <- hex_cent$SSU_Index
+        # check if N is even
+        if(N %% 2 != 0)
+            stop('`ssu_N` must be a even number.')
+
+        filtered_1 <- filtered
+
+        # loop to sample 4 
+        for(i in 1:N)
+        {
+            # sample point
+            assign(
+                paste0('sample_', i),
+                sample(
+                    ssuid[get(paste0('filtered_', i))],
+                    size = 1,
+                    prob = prob[get(paste0('filtered_', i))]
+                )
+            )
+
+            # remove points around the first sample for second point
+            toKeep <- !st_intersects(
+                geom,
+                st_buffer(
+                    geom[which(get(paste0('sample_', i)) == ssuid)],
+                    dist = ssuDist * 2 + ssuDist * 0.1),
+                    sparse = FALSE
+            )[, 1]
+
+            # update available points
+            assign(
+                paste0('filtered_', i + 1),
+                get(paste0('filtered_', i)) & toKeep
+            )
+        }
+
+        # create vector of 0, 1 (main), and 2 (over) codes
+        # number of main OR over given total N
+        n_sub <- N/2
         
+        out <- rep(0, length(filtered))
+        out[
+            ssuid %in% map_dbl(1:n_sub, ~ get(paste0('sample_', .x)))
+        ] <- 1      
+        out[
+            ssuid %in% map_dbl(n_sub + (1:n_sub), ~ get(paste0('sample_', .x)))
+        ] <- 2
+
+        return( out )
+
+    }
+
+
+
+    # Generate SSU points
+    SSUs <- map_dfr(
+        seq_len(nrow(selected_hexas)),
+        ~ genSSU(selected_hexas[.x, ], spacing = ssu_dist)
+    )
+
+    # Buffer of half `ssu_dist` to compute habitat inclusion prob
+    SSU_bf <- st_buffer(SSUs, dist = ssu_dist/2)
+
+    # extract pixels for each SSU polygon
+    hab_pixels <- exactextractr::exact_extract(
+        land_ca,
+        SSU_bf,
+        progress = FALSE
+    )
+    rm(SSU_bf)
+
+    # get frequence of each class of habitat
+    count_hab <- Map(
+                function(x, y) {
+                    freq <- table(x$value)
+                    if(length(freq) > 0) {
+                        data.frame(freq, ecoregion = y)
+                    }else{
+                        NA
+                    }
+                },
+                x = hab_pixels,
+                y = SSUs$ecoregion
+            )
+
+    # merge with inclusion probability
+    # and calculate inclusion probbaility for each NON empty polygon
+    SSUs$incl_prob <- unlist(
+            lapply(
+                count_hab,
+                function(x) {
+                    if(is.data.frame(x)) {
+                        mg_df <- merge(x, subset(prev_all, ID_ecoregion == x$ecoregion[1]), by.x = "Var1", by.y = "code" , all.x = TRUE)
+                        sum(mg_df$Freq * mg_df$incl_prob)
+                    }else{
+                        NA
+                    }
+                }
+            )
+        )
+    rm(count_hab)
+
+    SSUs <- SSUs %>%
+        group_by(ET_Index) %>%
+        mutate(
+            incl_prob = incl_prob/sum(incl_prob, na.rm = TRUE)
+        ) %>%
+        ungroup()
+
+
+    # Calculate proportion of NA
+    SSUs$propNA <- map_dbl(
+        hab_pixels,
+        ~ sum(is.na(.x$value))/nrow(.x)
+    )
+    rm(hab_pixels)
+
+    # neighbours matrix
+    neighbour_ls <- list()
+    for(hx in unique(SSUs$ET_Index))
+    {
+        ssuhx <- subset(SSUs, ET_Index == hx)
+
+        neighbour_ls[[hx]] <- st_intersects(
+            ssuhx,
+            st_buffer(ssuhx, dist = ssu_dist + ssu_dist * 0.1),
+            sparse = FALSE
+        )
+    }
+
+
+    # These are the following rules to a SSU be available to be sampled:
+    # - Must have 6 neighbours (less than that means it's a border SSU)
+    # - Must have at least 1 - `prop_na` of non empty pixels
+    # - 4 out 6 neighbours must also respect the above rule
+    SSU_dispo = SSUs %>%
+        group_by(ET_Index) %>%
+        mutate(
+            nbNeighb = map_dbl(
+                ssuID,
+                ~ sum(neighbour_ls[[unique(ET_Index)]][, .x]) - 1
+            ),
+            nbPropNA = map_int(
+                ssuID,
+                .f = function(x, pNA, ETI)
+                    sum(
+                        pNA[setdiff(which(neighbour_ls[[ETI]][, x]), x)] <= prop_na
+                    ),
+                pNA = propNA,
+                ETI = unique(ET_Index)
+            ),
+            sampled = sample_SSU(
+                ssuid = ssuID,
+                prob = incl_prob,
+                geom = geometry,
+                filtered = propNA <= prop_na & nbNeighb == 6  & nbPropNA >= 4,
+                ssuDist = ssu_dist,
+                N = ssu_N
+            )
+        ) %>%
+        ungroup()
+    
         # create a second index vector to store the points in which
         # have a road AND have inclusion probability > 0
         roads_ID <- ifelse(hex_cent$haveRoads == 1, TRUE, FALSE)
