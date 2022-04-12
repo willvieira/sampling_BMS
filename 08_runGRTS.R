@@ -197,6 +197,36 @@ set.seed(0.0)
 
 
 
+# Select the closest hexagon with the higher inclusion probability
+
+    # Extract neighbours hexagons
+    neigh_mt <- hexas %>%
+        st_centroid() %>%
+        st_intersects(
+            y = st_buffer(selected_hexas, dist = 3500),
+            sparse = FALSE
+        )
+
+    # Remove the focus hexagon (the selected one)
+    rr = match(selected_hexas$ET_Index, hexas$ET_Index)
+    cc = seq_along(rr)
+    neigh_mt[rr + nrow(neigh_mt) * (cc - 1)] <- FALSE
+
+
+    # Select extra hexagons based on the higher p
+    best_p <- apply(
+        neigh_mt,
+        2,
+        function(x)
+            hexas$ET_Index[x][which.max(hexas$p[x])]
+    )
+    
+    selected_extra <- subset(hexas, ET_Index %in% best_p)
+
+#
+
+
+
 # Select SSU
 
     # Calculate probability following habitat proportion from ecoregion
