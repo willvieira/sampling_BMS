@@ -553,7 +553,7 @@ best_bufferSize %>%
 ### Run GRTS for year 2
 
 The sampled hexagons (1%) of year 1 now become the legacy site for the year 2. 
-To select the hexagons for the second year, we have to adjust the sample size ($\sigma_{\text{adj N}}$) and the inclusion probability ($\sigma_{\text{adj p}}$) in function of a defined buffer size ($\sigma$).
+To select the hexagons for the second year, we will adjust the sample size ($bufSize$) and the inclusion probability ($\sigma_{\text{adj p}}$).
 We will compare the average of the optimum buffer size among the ecoregions (`r round(mean(best_bufferSize$best_bs), 1)` Km) with the predefined 10 Km.
 
 
@@ -691,7 +691,7 @@ for(eco in eco_sim)
         geom_sf(data = st_union(st_buffer(subset(selected_hexas, ecoregion == eco & sampled == 1), dist = 10000)), fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
         geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
         geom_sf(data = subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_10000$sites_base$ET_Index), fill = 'blue', col = 'blue') +
-        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_10000$sites_base$ET_Index)), ") hexagons year 2 (*σ<sub>adj N</sub>* = 10; *σ<sub>adj p</sub>* = 10)")) +
+        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_10000$sites_base$ET_Index)), ") hexagons year 2 (*bufSize* = 10; *σ<sub>adj p</sub>* = 10)")) +
         theme(plot.title = element_markdown())
 
     p3 <- ggplot() +
@@ -699,7 +699,7 @@ for(eco in eco_sim)
         geom_sf(data = st_union(st_buffer(subset(selected_hexas, ecoregion == eco & sampled == 1), dist = mean(best_bufferSize$best_bs) * 1000)), fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
         geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
         geom_sf(data = subset(hexas, ecoregion == eco  & ET_Index %in% out_sample$sites_base$ET_Index), fill = 'blue', col = 'blue') +
-        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample$sites_base$ET_Index)), ") hexagons year 2 (*σ<sub>adj N</sub>* = ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>* = ", round(mean(best_bufferSize$best_bs), 1), ")")) +
+        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample$sites_base$ET_Index)), ") hexagons year 2 (*bufSize* = ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>* = ", round(mean(best_bufferSize$best_bs), 1), ")")) +
         theme(plot.title = element_markdown())
 
     p4 <- ggplot() +
@@ -707,7 +707,7 @@ for(eco in eco_sim)
         geom_sf(data = st_union(st_buffer(subset(selected_hexas, ecoregion == eco & sampled == 1), dist = mean(best_bufferSize$best_bs) * 1000)), fill = rgb(.85, 0, 0, 0.05), color = 'transparent') +
         geom_sf(data = subset(selected_hexas, ecoregion == eco & sampled == 0), fill = 'lightblue', col = 'lightblue') +
         geom_sf(data = subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_adj10000$sites_base$ET_Index), fill = 'blue', col = 'blue') +
-        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_adj10000$sites_base$ET_Index)), ") hexagons year 2 (*σ<sub>adj N</sub>* = ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>* = 10)")) +
+        ggtitle(paste0("**<span style='color:blue;'>Selected</span>** (", nrow(subset(hexas, ecoregion == eco  & ET_Index %in% out_sample_adj10000$sites_base$ET_Index)), ") hexagons year 2 (*bufSize* = ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>* = 10)")) +
         theme(plot.title = element_markdown())
 
 
@@ -731,7 +731,7 @@ for(eco in eco_sim)
         dist_dt <- rbind(
             dist_dt,
             data.frame(
-                sim = "<span style='color:blue;'>Selected</span><br>(*σ<sub>adj N</sub>*:10; *σ<sub>adj p</sub>*: 10)",
+                sim = "<span style='color:blue;'>Selected</span><br>(*bufSize*:10; *σ<sub>adj p</sub>*: 10)",
                 ref = Ref,
                 dist = apply(
                     st_distance(
@@ -748,7 +748,7 @@ for(eco in eco_sim)
         dist_dt <- rbind(
             dist_dt, 
             data.frame(
-                sim = paste0("<span style='color:blue;'>Selected</span><br>(*σ<sub>adj N</sub>*: ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>*: ", round(mean(best_bufferSize$best_bs), 1), ")"),
+                sim = paste0("<span style='color:blue;'>Selected</span><br>(*bufSize*: ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>*: ", round(mean(best_bufferSize$best_bs), 1), ")"),
                 ref = Ref,
                 dist = apply(
                     st_distance(
@@ -765,7 +765,7 @@ for(eco in eco_sim)
         dist_dt <- rbind(
                 dist_dt, 
                 data.frame(
-                    sim = paste0("<span style='color:blue;'>Selected</span><br>(*σ<sub>adj N</sub>*: ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>*: 10)"),
+                    sim = paste0("<span style='color:blue;'>Selected</span><br>(*bufSize*: ", round(mean(best_bufferSize$best_bs), 1), "; *σ<sub>adj p</sub>*: 10)"),
                     ref = Ref,
                     dist = apply(
                         st_distance(
