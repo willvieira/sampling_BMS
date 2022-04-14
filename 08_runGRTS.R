@@ -78,11 +78,43 @@ set.seed(0.0)
 
 # legacy sites
 
-    # load data
-    legacySites <- read_csv('data/SitesLegacy_GRTS20220314.csv') %>%
-        group_by(Hexagone_Num) %>%
-        summarise(legacyNew = n()) %>%
-        rename(ET_Index = Hexagone_Num)
+    # function to transform Latitude & longitude legacy site points in a table
+    # with the number of points per hexagon ID (ET_Index)
+    import_legacySites <- function(File, lat_name, lon_name)
+    {
+        hx <- hexas %>%
+            st_transform(4326)
+        
+        # read file
+        lg <- read_csv(File) %>%
+            rename(
+                lat = all_of(lat_name),
+                lon = all_of(lon_name)
+            ) %>%
+            st_as_sf(
+                coords = c('lon', 'lat'),
+                crs = st_crs(hx)
+            )
+
+        # intersect
+        nbLegacy <- hx %>%
+            st_contains(lg, sparse = FALSE) %>%
+            apply(1, sum)
+
+        tibble(
+            ET_Index = hx$ET_Index,
+            legacyNew = nbLegacy
+        ) %>%
+        filter(legacyNew > 0)
+    }
+    
+
+    # load and transform legacy info
+    legacySites <- import_legacySites(
+        File = 'data/SitesLegacy_GRTS20220314.csv',
+        lat_name = 'Lat_DegDecValide',
+        lon_name = 'Long_DegDecValide'
+    )
 
     # merge to hexagons
     hexas <- hexas %>%
