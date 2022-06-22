@@ -2,6 +2,7 @@
 ### Title: Run GRTS
 ### Author: Will Vieira
 ### December 9, 2020
+### Last edited: June 22, 2022
 ########################################################################
 
 library(raster)
@@ -238,31 +239,52 @@ set.seed(0.0)
 
 
 
-# Select the closest hexagon with the higher inclusion probability
+## EXTRA SAMPLE
+# Select the closest hexagon with the biggest inclusion probability
 
-    # Extract neighbours hexagons
-    neigh_mt <- hexas %>%
-        st_centroid() %>%
-        st_intersects(
-            y = st_buffer(selected_hexas, dist = 3500),
-            sparse = FALSE
+    # loop over ecoregions to make sure neighbours are from the same ecoregion
+    selected_extra <- hexas[0, ]
+    for(eco in eco_sim)
+    {
+        hexas_eco <- subset(hexas, ecoregion == eco)
+        hexas_sel_eco <- subset(selected_hexas, ecoregion == eco)
+
+        # Extract neighbours hexagons
+        neigh_mt <- hexas_eco %>%
+            st_centroid() %>%
+            st_intersects(
+                y = st_buffer(hexas_sel_eco, dist = 3500),
+                sparse = FALSE
+            )
+
+        # Remove the focus hexagon (the selected one)
+        rr = match(hexas_sel_eco$ET_Index, hexas_eco$ET_Index)
+        cc = seq_along(rr)
+        neigh_mt[rr + nrow(neigh_mt) * (cc - 1)] <- FALSE
+
+        # Select the extra hexagon based on the biggest p
+        best_p <- apply(
+            neigh_mt,
+            2,
+            function(x)
+                hexas_eco$ET_Index[x][which.max(hexas_eco$p[x])]
         )
 
-    # Remove the focus hexagon (the selected one)
-    rr = match(selected_hexas$ET_Index, hexas$ET_Index)
-    cc = seq_along(rr)
-    neigh_mt[rr + nrow(neigh_mt) * (cc - 1)] <- FALSE
-
-
-    # Select extra hexagons based on the higher p
-    best_p <- apply(
-        neigh_mt,
-        2,
-        function(x)
-            hexas$ET_Index[x][which.max(hexas$p[x])]
-    )
-    
-    selected_extra <- hexas[match(best_p, hexas$ET_Index), ]
+        # if a selected hexagon has no neighbour, select a random from the ecoregion
+        toCheck <- unlist(lapply(best_p, length))
+        if(any(toCheck == 0)) {
+            # which hexagons where not selected? 
+            nonSelected_hexas <- setdiff(hexas_eco$ET_Index, hexas_sel_eco$ET_Index)
+            
+            # sample and add as extra
+            best_p[which(toCheck == 0)] <- sample(nonSelected_hexas, sum(toAdd == 0))
+        }
+        
+        selected_extra <- rbind(
+            selected_extra,
+            hexas_eco[match(best_p, hexas$ET_Index), ]
+        )
+    }
 
 #
 
@@ -274,7 +296,7 @@ set.seed(0.0)
     ########################
 
     land_ca <- raster("data/landcover_ca_30m.tif")
-    prev_all <- readRDS('data/prev_all.RDS')    
+    prev_all <- readRDS('data/prev_all.RDS')
 
     # function to generate SSU points (from: https://github.com/dhope/BASSr)
     genSSU <- function(h, spacing)
