@@ -26,8 +26,8 @@ set.seed(0.0)
     sample_effort = 0.02
 
     # Total sample size for SSU (Main + Over)
-    # It must be a even number
-    ssu_N = 4
+    # It must be an even number
+    ssu_N = 6
 
     # Number of replications when running the GRTS
     nb_rep = 15
@@ -57,6 +57,11 @@ set.seed(0.0)
 
     # Distance between SSU centroid (in meters)
     ssu_dist = 294
+
+    # Name of file and columns to extract legacy
+    legacyFile = 'data/SitesLegacy_GRTS20220314.csv'
+    lat = 'Lat_DegDecValide'
+    lon = 'Long_DegDecValide'
 
 #
 
@@ -111,9 +116,9 @@ set.seed(0.0)
 
     # load and transform legacy info
     legacySites <- import_legacySites(
-        File = 'data/SitesLegacy_GRTS20220314.csv',
-        lat_name = 'Lat_DegDecValide',
-        lon_name = 'Long_DegDecValide'
+        File = legacyFile,
+        lat_name = lat,
+        lon_name = lon
     )
 
     # merge to hexagons
@@ -157,6 +162,10 @@ set.seed(0.0)
         bf_N = bufferSize_N,
         sample_e = sample_effort
     )
+
+
+    # if ecoregion is too small, assure to sample at least two hexagons for all ecoregions
+    sampleSize[sampleSize < 2] = 2
 
 #
  
