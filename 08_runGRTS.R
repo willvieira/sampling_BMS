@@ -34,7 +34,7 @@ set.seed(0.0)
     nb_rep = 15
 
     # Ecoregions
-    eco_sim <- c(
+    eco_sim = c(
         '7', '28', '30', '31',
         '46', '47', '48', '49',
         '73', '77', '78', '86',
@@ -63,6 +63,9 @@ set.seed(0.0)
     legacyFile = 'data/SitesLegacy_GRTS20220314.csv'
     lat = 'Lat_DegDecValide'
     lon = 'Long_DegDecValide'
+
+    # Output folder to save the shapefiles with PSU and SSU
+    outputFolder =  '../../ownCloud/BMS_Bruno/selection2022'
 
 #
 
@@ -240,7 +243,7 @@ set.seed(0.0)
 
 
 ## EXTRA SAMPLE
-# Select the closest hexagon with the biggest inclusion probability
+# Select the closest hexagon with the highest inclusion probability
 
     # loop over ecoregions to make sure neighbours are from the same ecoregion
     selected_extra <- hexas[0, ]
@@ -262,7 +265,7 @@ set.seed(0.0)
         cc = seq_along(rr)
         neigh_mt[rr + nrow(neigh_mt) * (cc - 1)] <- FALSE
 
-        # Select the extra hexagon based on the biggest p
+        # Select the extra hexagon based on the highest p
         best_p <- apply(
             neigh_mt,
             2,
@@ -348,17 +351,21 @@ set.seed(0.0)
             stop('`ssu_N` must be a even number.')
 
         filtered_1 <- filtered
+        out <- rep(0, length(filtered))
 
-        # loop to sample 4 
-        for(i in 1:N)
-        {
+        # loop to sample 4
+        count = 1
+        while(
+            count <= N &
+            sum(get(paste0('filtered_', count))) > 1
+        ){
             # sample point
             assign(
-                paste0('sample_', i),
+                paste0('sample_', count),
                 sample(
-                    ssuid[get(paste0('filtered_', i))],
+                    ssuid[get(paste0('filtered_', count))],
                     size = 1,
-                    prob = prob[get(paste0('filtered_', i))]
+                    prob = prob[get(paste0('filtered_', count))]
                 )
             )
 
@@ -366,29 +373,22 @@ set.seed(0.0)
             toKeep <- !st_intersects(
                 geom,
                 st_buffer(
-                    geom[which(get(paste0('sample_', i)) == ssuid)],
+                    geom[which(get(paste0('sample_', count)) == ssuid)],
                     dist = ssuDist * 2 + ssuDist * 0.1),
                     sparse = FALSE
             )[, 1]
 
             # update available points
             assign(
-                paste0('filtered_', i + 1),
-                get(paste0('filtered_', i)) & toKeep
+                paste0('filtered_', count + 1),
+                get(paste0('filtered_', count)) & toKeep
             )
-        }
 
-        # create vector of 0, 1 (main), and 2 (over) codes
-        # number of main OR over given total N
-        n_sub <- N/2
-        
-        out <- rep(0, length(filtered))
-        out[
-            ssuid %in% map_dbl(1:n_sub, ~ get(paste0('sample_', .x)))
-        ] <- 1      
-        out[
-            ssuid %in% map_dbl(n_sub + (1:n_sub), ~ get(paste0('sample_', .x)))
-        ] <- 2
+            # assign point to output vector
+            out[get(paste0('sample_', count))] = count
+            
+            count = count + 1
+        }
 
         return( out )
 
@@ -477,7 +477,143 @@ set.seed(0.0)
     # - Must have 6 neighbours (less than that means it's a border SSU)
     # - Must have at least 1 - `prop_na` of non empty pixels
     # - 4 out 6 neighbours must also respect the above rule
-    SSU_dispo = SSUs %>%
+    SSU_selected = SSUs %>%
+        group_by(ET_Index) %>%
+        mutate(
+            nbNeighb = map_dbl(
+                ssuID,
+                ~ sum(neighbour_ls[[unique(ET_Index)]][, .x]) - 1
+            ),
+            nbPropNA = map_int(
+                ssuID,
+                .f = function(x, pNA, ETI)
+                    sum(
+                        pNA[setdiff(which(neighbour_ls[[ETI]][, x]), x)] <= prop_na
+                    ),
+                pNA = propNA,
+                ETI = unique(ET_Index)
+            ),
+            sampled = sample_SSU(
+                ssuid = ssuID,
+                prob = incl_prob,
+                geom = geometry,
+                filtered = propNA <= prop_na & nbNeighb == 6  & nbPropNA >= 4,
+                ssuDist = ssu_dist,
+                N = ssu_N
+            )
+        ) %>%
+        ungroup()
+
+    # Prepare selected SSU and their specific neighbours with code like `A_B`
+    # `A` is for the SSU sample ID (1:`ssu_N`)
+    # `B` is for the neighbour ID (0:6 where zero is the focal point, and 1:6 are the 6 neighbours starting from the top point moving clockwise)
+    SSUmain <- subset(SSU_selected, sampled > 0)
+    SSU_main_ls <- list()
+
+    for(i in 1:nrow(SSUmain))
+    {
+        # get neighbours for specific row
+        nei_hx <- SSU_selected %>% 
+            filter(ET_Index == SSUmain$ET_Index[i]) %>% 
+            filter(ssuID %in% which(neighbour_ls[[SSUmain$ET_Index[i]]][, SSUmain$ssuID[i]]))
+
+        # code A 
+        nei_hx$codeA <- SSUmain$sampled[i]
+        
+        # code B
+        nei_hx$codeB <- c(4, 3, 5, 0, 2, 6, 1)
+
+        SSU_main_ls[[i]] <- nei_hx
+    }
+
+    SSUmain <- do.call(rbind, SSU_main_ls)
+
+
+
+
+    # SAME BUT FOR THE EXTRA HEXAGONS (TODO)
+    # Generate SSU points
+    SSUs <- map_dfr(
+        seq_len(nrow(selected_extra)),
+        ~ genSSU(selected_extra[.x, ], spacing = ssu_dist)
+    )
+
+    # Buffer of half `ssu_dist` to compute habitat inclusion prob
+    SSU_bf <- st_buffer(SSUs, dist = ssu_dist/2)
+
+    # extract pixels for each SSU polygon
+    hab_pixels <- exactextractr::exact_extract(
+        land_ca,
+        SSU_bf,
+        progress = FALSE
+    )
+    rm(SSU_bf)
+
+    # get frequence of each class of habitat
+    count_hab <- Map(
+                function(x, y) {
+                    freq <- table(x$value)
+                    if(length(freq) > 0) {
+                        data.frame(freq, ecoregion = y)
+                    }else{
+                        NA
+                    }
+                },
+                x = hab_pixels,
+                y = SSUs$ecoregion
+            )
+
+    # merge with inclusion probability
+    # and calculate inclusion probbaility for each NON empty polygon
+    SSUs$incl_prob <- unlist(
+            lapply(
+                count_hab,
+                function(x) {
+                    if(is.data.frame(x)) {
+                        mg_df <- merge(x, subset(prev_all, ID_ecoregion == x$ecoregion[1]), by.x = "Var1", by.y = "code" , all.x = TRUE)
+                        sum(mg_df$Freq * mg_df$incl_prob)
+                    }else{
+                        NA
+                    }
+                }
+            )
+        )
+    rm(count_hab)
+
+    SSUs <- SSUs %>%
+        group_by(ET_Index) %>%
+        mutate(
+            incl_prob = incl_prob/sum(incl_prob, na.rm = TRUE)
+        ) %>%
+        ungroup()
+
+
+    # Calculate proportion of NA
+    SSUs$propNA <- map_dbl(
+        hab_pixels,
+        ~ sum(is.na(.x$value))/nrow(.x)
+    )
+    rm(hab_pixels)
+
+    # neighbours matrix
+    neighbour_ls <- list()
+    for(hx in unique(SSUs$ET_Index))
+    {
+        ssuhx <- subset(SSUs, ET_Index == hx)
+
+        neighbour_ls[[hx]] <- st_intersects(
+            ssuhx,
+            st_buffer(ssuhx, dist = ssu_dist + ssu_dist * 0.1),
+            sparse = FALSE
+        )
+    }
+
+
+    # These are the following rules to a SSU be available to be sampled:
+    # - Must have 6 neighbours (less than that means it's a border SSU)
+    # - Must have at least 1 - `prop_na` of non empty pixels
+    # - 4 out 6 neighbours must also respect the above rule
+    SSU_selected_extra = SSUs %>%
         group_by(ET_Index) %>%
         mutate(
             nbNeighb = map_dbl(
@@ -504,176 +640,159 @@ set.seed(0.0)
         ) %>%
         ungroup()
     
-        # create a second index vector to store the points in which
-        # have a road AND have inclusion probability > 0
-        roads_ID <- ifelse(hex_cent$haveRoads == 1, TRUE, FALSE)
-        if(all(!roads_ID))
-            roads_ID <- rep(TRUE, nrow(hex_cent))
-        
-        # If roads + incProb are not enough to sample (>1), forget about it
-        if(sum(roads_ID & !is.na(hex_cent$incProb)) > 1)
-        {
-            roadsProb_ID <- roads_ID & !is.na(hex_cent$incProb)
-        }else{
-            roadsProb_ID <- !is.na(hex_cent$incProb)
-        }
-        
-        
-        # If all IDs are FALSE, we stop the function here as none of the points have habitat
-        if(all(!roadsProb_ID))
-            stop(paste('Inclusion probability returns a vector of NAs for Hexagon:', unique(hex_cent$ET_Index)))
 
-        out_ls <- list(); Count = 1
-        for(Rep in 1:repetitions)
-        {
-            # Sample first point
-            sample_1 <- sample(point_ID[roadsProb_ID], size = 1, prob = hex_cent$incProb[roadsProb_ID])
-            
-            # Remove all points around the already sampled point
-            # using a buffer of 1200 x 1200 meters
-            toKeep <- !st_intersects(
-                    hex_cent,
-                    st_buffer(hex_cent[sample_1, ], dist = 855),
-                    sparse = FALSE
-                )
+    # Prepare selected SSU and their specific neighbours with code like `A_B`
+    # `A` is for the SSU sample ID (1:`ssu_N`)
+    # `B` is for the neighbour ID (0:6 where zero is the focal point, and 1:6 are the 6 neighbours starting from the top point moving clockwise)
+    SSUover <- subset(SSU_selected_extra, sampled > 0)
+    SSU_over_ls <- list()
 
-            if(sum(toKeep & roadsProb_ID) > 1)
-            {
-                sample_2 <- sample(point_ID[toKeep & roadsProb_ID], size = 1, prob = hex_cent$incProb[toKeep & roadsProb_ID])
-            }else{
-                sample_2 <- sample(point_ID[toKeep & !is.na(hex_cent$incProb)], size = 1, prob = hex_cent$incProb[toKeep & !is.na(hex_cent$incProb)])
-            }
-            
-            sample_grid <- hex_cent[c(sample_1, sample_2), ]
-                    
-            # add attribute table
-            sample_grid$Rep = Rep
-            sample_grid$point = 1:2
-                            
-            out_ls[[Count]] <- sample_grid
-            Count = Count + 1
-        }
-        hexa_points <- do.call(rbind, out_ls)
-    }
-
-
-    # Get which hexagons cross the buffer of 1km around the roads
-    # For the hexagons with roads, we will try to sample inside the buffer only
-    # If it's not possible for both points to be inside the buffer, then the second will be outside
-    roads_bf <- roads %>%
-        st_transform(st_crs(selected_hexas)) %>%
-        st_buffer(dist = 1000)
-
-    haveRoads <- st_intersects(selected_hexas, roads_bf, sparse = FALSE)     
-    selected_hexas$haveRoads <- apply(haveRoads, 1, function(x) ifelse(sum(x) > 0, 1, 0))
-
-
-
-
-    # Get squares for all selected hexagons
-    selHx_squares <- map_dfr(
-        seq_len(nrow(selected_hexas)),
-        function(x) get_squares(selected_hexas[x, ], cellSize = 300, roads_bf)
-    )
-    
-    saveRDS(selHx_squares, file = 'selHx_squares.RDS') 
-    
-    # Get inclusion probability for each square
-    selHx_squares$incProb = calc_habProb(
-        squares = selHx_squares,
-        landUse = land_ca,
-        incProb = prev_all
-    )
-
-
-    # Now the habitat is extracted, we can keep the sampling point only (centroid)
-    selHx_cent <- selHx_squares %>%
-        st_centroid()
-
-
-    # Sample points within hexagon
-    out_sample <- map_dfr(
-        unique(selHx_cent$ET_Index),
-        function(x)
-            sample_SSU(
-                 hex_cent = subset(selHx_cent, ET_Index == x),
-                 repetitions = 10
-            )
-        )
-
-## Get the points around the selected SSU for Bruno, and save the X and Y coordinates
-
-# list shp files
-filesBruno <- list.files('../../Downloads/SSU_sélectionnés_Bruno/', pattern = "\\.shp$")
-dir.create('SSU_selectionnes_Bruno')
-
-for(File in filesBruno)
-{
-    # load hexagons
-    couche_file <- read_sf(paste0('../../Downloads/SSU_sélectionnés_Bruno/', File))
-    
-    hexas_ID <- unique(couche_file$ET_Index)
-    hexas_neighbors <- list(); Count = 1
-    for(hx_ID in hexas_ID)
+    for(i in 1:nrow(SSUover))
     {
-        all_points_hx <- hexas %>%
-            filter(ET_Index == hx_ID) %>%
-            st_make_grid(cellsize = 300, what = 'centers')
-        all_points_hx <- st_sf(
-            data.frame(
-                SSU_Index = NA
-            ),
-            geometry = all_points_hx
-            
-        )
+        # get neighbours for specific row
+        nei_hx <- SSU_selected_extra %>% 
+            filter(ET_Index == SSUover$ET_Index[i]) %>% 
+            filter(ssuID %in% which(neighbour_ls[[SSUover$ET_Index[i]]][, SSUover$ssuID[i]]))
 
-        # Which are inside the hexagon?
-        toKeep <- st_intersects(all_points_hx, subset(hexas, ET_Index == hx_ID), sparse = FALSE)
-        all_points_hx$SSU_Index[toKeep] <- 1:sum(toKeep)
-        all_points_hx$SSU_Index[!toKeep] <- seq(sum(toKeep) + 1, sum(toKeep) + sum(!toKeep))
+        # code A 
+        nei_hx$codeA <- SSUover$sampled[i]
+        
+        # code B
+        nei_hx$codeB <- c(4, 3, 5, 0, 2, 6, 1)
 
-        ref_points_hx <- subset(couche_file, ET_Index == hx_ID)
-
-        all_points_hx$ecoregion = unique(ref_points_hx$ecoregion)
-        all_points_hx$ET_Index = hx_ID
-
-        neighbors_ls <- list()
-        for(i in 1:nrow(ref_points_hx))
-        {
-            neighbors_i = all_points_hx[which(st_intersects(st_buffer(ref_points_hx[i, ], dist = 555), all_points_hx, sparse = FALSE)), ]    
-
-            # adjust attribute table
-            neighbors_i$repetition = ref_points_hx$repetition[i]
-            neighbors_i$group <- ref_points_hx$point[i]
-            neighbors_i$point <- 0
-            neighbors_i$point[!ref_points_hx$SSU_Index[i] == neighbors_i$SSU_Index] = 1:sum(!ref_points_hx$SSU_Index[i] == neighbors_i$SSU_Index)
-
-            neighbors_ls[[i]] <- neighbors_i
-        }
-        hexas_neighbors[[Count]] <- do.call(rbind, neighbors_ls)
-        Count = Count + 1
+        SSU_over_ls[[i]] <- nei_hx
     }
 
-    couche_neighbors <- do.call(rbind, hexas_neighbors)
+    SSUover <- do.call(rbind, SSU_over_ls)
 
-    # Organize
-    couche_neighbors <- couche_neighbors[, 
-                match(
-                    c('ecoregion', 'ET_Index', 'repetition', 'SSU_Index', 'group', 'point', 'geometry'),
-                    names(couche_neighbors)
-                )
-    ]
 
-    # Get X and Y
-    coords <- couche_neighbors %>%
-        sf::st_transform(4326) %>%
-        sf::st_coordinates() %>%
-        as.data.frame()
 
-    couche_neighbors$X <- coords$X
-    couche_neighbors$Y <- coords$Y
+    # Prepare export of shapefiles by ecoregion
+    for(eco in eco_sim)
+    {
+        # create folder
+        eco_path <- file.path(outputFolder, paste0('ecoregion_', eco))
+        dir.create(eco_path, recursive = TRUE)
 
-    # save
-    write_sf(couche_neighbors, paste0('SSU_selectionnes_Bruno/',File))
+        # PSU
+        ###########################################
+        dir.create(file.path(eco_path, 'PSU_hexagons'))
 
-}
+        varsToRm = c('OBJECTID', 'Join_Count', 'TARGET_FID', 'ET_ID', 'ET_ID_Old', 'ET_IDX_Old', 'legacySite', 'legacyNew')
+
+        hexas_eco <- hexas %>%
+            filter(ecoregion == eco) %>%
+            select(-varsToRm)
+
+        coords <- hexas_eco %>%
+            sf::st_centroid() %>%
+            sf::st_transform(4326) %>%
+            sf::st_coordinates() %>%
+            as.data.frame()
+
+        # all hexagons
+        hexas_eco %>%
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) %>%
+            write_sf(file.path(eco_path, 'PSU_hexagons', 'all_hexagons.shp'))
+
+        # main hexagons
+        hexas_eco %>%
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) %>%
+            filter(ET_Index %in% subset(selected_hexas, ecoregion == eco)$ET_Index) %>%
+            write_sf(file.path(eco_path, 'PSU_hexagons', 'main_hexagons.shp'))
+
+        # over hexagons
+        hexas_eco %>%
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) %>%
+            filter(ET_Index %in% subset(selected_extra, ecoregion == eco)$ET_Index) %>%
+            write_sf(file.path(eco_path, 'PSU_hexagons', 'over_hexagons.shp'))
+
+        
+        # SSU
+        ###########################################
+        dir.create(file.path(eco_path, 'SSU_points'))
+
+        # SSU main
+        SSU_eco <- SSU_selected %>%
+            filter(ecoregion == eco) %>%
+            select(-c('nbNeighb', 'nbPropNA', 'sampled'))
+
+        coords <- SSU_eco %>%
+            sf::st_transform(4326) %>%
+            sf::st_coordinates() %>%
+            as.data.frame()
+
+        SSU_eco %>%
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) %>%
+            write_sf(file.path(eco_path, 'SSU_points', 'all_main.shp'))
+
+        # SSU over
+        SSU_eco_extra <- SSU_selected_extra %>%
+            filter(ecoregion == eco) %>%
+            select(-c('nbNeighb', 'nbPropNA', 'sampled'))
+
+        coords <- SSU_eco_extra %>%
+            sf::st_transform(4326) %>%
+            sf::st_coordinates() %>%
+            as.data.frame()
+
+        SSU_eco_extra %>%
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) %>%
+            write_sf(file.path(eco_path, 'SSU_points', 'all_over.shp'))
+
+        # SSU selected main
+        SSUmain_eco <- SSUmain %>%
+            filter(ecoregion == eco) %>%
+            mutate(
+                sample = paste0(codeA, '_', codeB)
+            ) %>%
+            select('ET_Index', 'ecoregion', 'ssuID', 'incl_prob', 'sample')
+
+        coords <- SSUmain_eco %>%
+            sf::st_transform(4326) %>%
+            sf::st_coordinates() %>%
+            as.data.frame()
+        
+        SSUmain_eco %>%
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) %>%
+            write_sf(file.path(eco_path, 'SSU_points', 'selected_main.shp'))
+        
+        # SSU selected over
+        SSUover_eco <- SSUover %>%
+            filter(ecoregion == eco) %>%
+            mutate(
+                sample = paste0(codeA, '_', codeB)
+            ) %>%
+            select('ET_Index', 'ecoregion', 'ssuID', 'incl_prob', 'sample')
+
+        coords <- SSUover_eco %>%
+            sf::st_transform(4326) %>%
+            sf::st_coordinates() %>%
+            as.data.frame()
+        
+        SSUover_eco %>%
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) %>%
+            write_sf(file.path(eco_path, 'SSU_points', 'selected_over.shp'))
+
+    }
