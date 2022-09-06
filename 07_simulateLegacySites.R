@@ -1113,3 +1113,184 @@ for(eco in eco_sim)
 plot(0, pch = '', xlab = '', ylab = '', xaxt = 'n', yaxt = 'n', bty = 'n')
 legend('center', legend = p_weight, lty = 1, lwd = 1.5, col = sim_col, bty = 'n')
 dev.off()
+
+
+
+
+## Simulations to find the best buffer size to best ajust sample size
+# For that, we run grts for one year, sample a part of the output, and compute which sample size would result in the same amout of the ramining non-sampled hexagons
+
+# function to find the best buffer size for a specific ecoregion and GRTS run
+optimum_bufferSize <- function(hexa_eco,
+                               hexas_sel,
+                               minSize,
+                               maxSize,
+                               N_init,
+                               N_expected,
+                               accept
+){
+    bufsize <- (maxSize + minSize)/2
+
+    lg <- hexas_sel %>%
+        st_buffer(bufsize) %>%
+        st_union()
+    
+    adj_ss <- hexa_eco %>%
+            st_intersects(lg) %>%
+            unlist() %>%
+            sum() * 0.02
+
+    n_pred <- N_init - adj_ss
+    while(abs(N_expected - n_pred) > accept)
+    {    
+        # adjust buffer size
+        if((N_expected - n_pred) > 0) {
+            maxSize = bufsize
+        }else{
+            minSize = bufsize
+        }
+        bufsize <- (maxSize + minSize)/2
+
+        lg <- hexas_sel %>%
+            st_buffer(bufsize) %>%
+        st_union()
+        
+        adj_ss <- hexa_eco %>%
+            st_intersects(lg) %>%
+            unlist() %>%
+            sum() * 0.02
+
+        n_pred <- N_init - adj_ss
+    }
+
+    return( bufsize )
+}
+
+nb_rep <- 30
+
+eco_sim <- hexas %>%
+    st_drop_geometry() %>%
+    filter(ecoregion %in% grep('N|S', ecoregion, value = TRUE, invert = TRUE)) %>%
+    group_by(ecoregion) %>%
+    summarise(n = n()) %>% 
+    filter(n > 300) %>%
+    pull(ecoregion)
+
+# Sample size by stratum (ecoregion)
+Stratdsgn  <- c()
+for(eco in eco_sim)
+    Stratdsgn <- append(
+        Stratdsgn,
+        setNames(
+            round(nrow(subset(hexas, ecoregion == eco)) * 0.02, 0),
+            paste0('eco_', eco)
+        )
+    )
+
+
+# prepare sample frame
+sampleFrame <- hexas %>%
+    filter(ecoregion %in% eco_sim) %>%
+    mutate(
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+
+
+
+# run GRTS    
+out_sample <- spsurvey::grts(
+    sframe = sampleFrame,
+    n_base = Stratdsgn,
+    stratum_var = 'eco_name'
+)
+
+# sample part of the output
+sample_rows <- function(n, sizeProp) {
+    out = rep(0, n)
+    out[sample(1:n, round(n * sizeProp, 0))] = 1
+    return(as.factor(out))
+}
+
+# sample for different proportions
+sample_prop <- seq(0.1, 0.9, 0.05)
+
+bufferSize <- data.frame()
+count = 1
+for(eco in eco_sim)
+{
+    hexa_eco <- hexas %>%
+                filter(ecoregion == eco) %>%
+                st_centroid()
+
+
+    selected_hexas <- hexas %>%
+                filter(
+                    ET_Index %in% out_sample$sites_base$ET_Index &
+                    ecoregion == eco
+                )
+
+    for(j in 1:length(sample_prop))
+    {
+        for(i in 1:nb_rep)
+        {
+            sampled = sample_rows(
+                nrow(selected_hexas),
+                sizeProp = sample_prop[j]
+            )
+
+            hexa_selected <- selected_hexas[sampled == 1, ]
+
+            # Inital and expected N
+            ninit <- nrow(selected_hexas)
+            nexpt <- sum(sampled == 0)
+            
+            opt_size <- optimum_bufferSize(
+                hexa_eco,
+                hexa_selected,
+                minSize = 5000,
+                maxSize = 45000,
+                N_init = ninit,
+                N_expected = nexpt,
+                accept = .5
+            );opt_size
+
+            bufferSize <- rbind(
+                bufferSize,
+                data.frame(
+                    ecoregion = eco,
+                    rep = i,
+                    sizeProp = sample_prop[j],
+                    optSize = opt_size
+                )
+            )
+            cat(round(count/(nb_rep * length(sample_prop) * length(eco_sim)) * 100, 0), '%\r')
+            count = count + 1
+        }
+    }
+}
+
+
+# plot
+bufferSize %>%
+    mutate(rep = as.factor(rep)) %>%
+    ggplot(aes(x = sizeProp, y = optSize)) +
+        geom_point(alpha = 0.2) +
+        geom_smooth() +
+        facet_wrap(~ ecoregion)
+
+
+bufferSize %>%
+    mutate(sizeProp = as.factor(sizeProp)) %>%
+    ggplot(aes(x = optSize, y = ecoregion)) +
+        ggridges::geom_density_ridges(alpha = 0.3) +
+        theme_classic()
+
+
+
+getBuff <- function(TA, MA, sampleSize = 0.02, sampleSize_2)
+    sqrt(-((((MA^2)/(sampleSize_2)) - (TA * MA))/MA)/pi) * 2
+
+
+getBuff(TA = totalArea, MA = missingArea)
+
