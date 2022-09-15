@@ -1,0 +1,23 @@
+name: Build report
+
+on: 
+  branch: main
+
+jobs:
+  build_deploy:
+    runs-on: ubuntu-latest
+    steps:    
+      - name: Render Quarto Project
+        uses: quarto-dev/quarto-actions/render@v2
+        with:
+          tinytex: true
+          to: all
+          path: Report
+    
+      - name: Deploy gh_pages
+        uses: JamesIves/github-pages-deploy-action@releases/v3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: gh-pages
+          FOLDER: Report/_book
+          SINGLE_COMMIT: true
