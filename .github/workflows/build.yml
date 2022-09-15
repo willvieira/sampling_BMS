@@ -1,7 +1,9 @@
 name: Build report
 
-on: 
-  branch: main
+on:
+  push:
+    branches:
+      - master
 
 jobs:
   build_deploy:
