@@ -1,0 +1,15 @@
+## Welcome {.unnumbered}
+
+This webpage contains the technical report detailing the Sampling design for monitoring boreal birds in Quebec.
+
+The online version of this report is hosted at [willvieira.github.io/sampling_BMS](https://willvieira.github.io/sampling_BMS/) and is automatically built whenever the code repository at [github.com/sampling_BMS](https://github.com/willvieira/sampling_BMS) is modified. The current build status is:
+
+[![Build html](https://github.com/EcoNumUdS/BIO500/actions/workflows/build.yml/badge.svg)](https://github.com/EcoNumUdS/BIO500/actions/workflows/build.yml)
+
+```{r index-2-2, echo=FALSE, results="asis"}
+cat(paste0("This version of the report was built on GitHub Actions on ", Sys.Date(), "."))
+```
+
+## License
+
+TBD

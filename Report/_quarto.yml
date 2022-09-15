@@ -1,0 +1,40 @@
+project:
+  type: book
+
+book:
+  title: "Sampling design for monitoring boreal birds in Quebec"
+  author:
+    - name: Willian Vieira
+      orcid: 0000-0003-0283-4570
+    - name: Bruno Drolet
+  search: true
+  repo-url: "https://github.com/willvieira/sampling_BMS/"
+  repo-actions: [issue]
+  downloads: [pdf]
+  sharing: [twitter]
+  cover-image: cover.png
+  output-dir: docs
+  chapters:
+    - index.qmd
+    - intro.qmd
+    - part: Spatial data layers
+      chapters:
+      - habitat.qmd
+      - cost.qmd
+      - legacy.qmd
+    - part: Sampling algorithm
+      chapters:
+      - sampleSize.qmd
+      - PSU.qmd
+      - SSU.qmd
+    - references.qmd
+
+bibliography: references.bib
+
+format:
+  html:
+    theme: cosmo
+  pdf:
+    documentclass: scrreprt
+
+number-depth: 1

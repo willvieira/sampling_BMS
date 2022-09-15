@@ -1,0 +1,12 @@
+# Introduction
+
+Bref description of the project
+
+This report is separeted in two sections.
+The first section details the preparation of the layers needed by the GRTS algorithm.
+The second section details how the PSU and SSU sampled were performed using the GRTS approach.
+In the appendices, I describe the simulations performed to adjust the national approach to the Quebec province.
+
+## GRTS algorithm
+
+Describe algo and its source [@Wilgenburg2020].
