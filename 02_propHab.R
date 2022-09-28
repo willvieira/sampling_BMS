@@ -77,6 +77,10 @@ prev_all <- do.call(rbind, c(
 
 saveRDS(prev_all, 'data/prev_all.RDS')
 
+# data to be used in the Report
+dir.create('Report/data', recursive = TRUE, showWarnings = FALSE)
+saveRDS(prev_all, 'Report/data/prev_all.RDS')
+
 
 # # viz how probability vary in function of # of veg type (code) and its frequence
 # par(mfrow = c(1, 2))
