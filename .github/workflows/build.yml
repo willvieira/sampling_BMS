@@ -22,9 +22,17 @@ jobs:
         with:
           use-public-rspm: true
 
-      - uses: r-lib/actions/setup-renv@v2
+#       - uses: r-lib/actions/setup-renv@v2
+#         with:
+#           cache-version: 1
+
+      - name: Install dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          cache-version: 1
+          packages: |
+            jsonlite
+            tidyverse
+            kableExtra
 
       - name: Render Quarto Project
         uses: quarto-dev/quarto-actions/render@v2
