@@ -1,3 +1,16 @@
 # Legacy sites
 
-Text
+- Describe legacy sites
+- Map of legacy sites
+- Count number of legacy sites per hexagon
+- Cite the simulations in Apendix X where we define the best values of buffer size to reduce inclusion probability and adjust sample size
+
+## Inclusion probability
+
+- Inclusion probability of each hexagon is adjust given a buffer around legacy sites using the R package `MBHdesign` [@Foster2021].
+
+## Sample size
+
+- Sample size of an ecoregion is ajusted given a buffer around the legacy sites present in the ecoregion.
+
+

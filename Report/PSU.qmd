@@ -1,3 +1,19 @@
 # Primary sampling unity
 
-Text
+- The stratified selection of hexagons (PSUs) is performed using the GRTS algorithm.
+
+## User defined parameters
+
+The user has to define some parameters when running the GRTS such as:
+- List of ecoregions to sample
+- Sample effort
+- Number of replications
+- A csv file with at least latitude and longitude information for each legacy site
+- The folder to save the selected hexagons
+
+
+## GRTS
+
+- The GRTS samples hexagons for N replication times.
+- The cheapest replication is selected.
+- Once the main hexagons are selected by the GRTS, we manually select an available neighbour hexagon with the highest inclusion probability.

@@ -2,6 +2,8 @@
 
 ## Area of study
 
+- Polygon of study area
+
 ## Ecoregion
 
 - List ecoregions used
@@ -11,4 +13,4 @@
 
 - Only the hexagons in which their centroid fall into the study area are used.
 - Each hexagon is classified into one of the ecoregions following the same centroid rule.
-- 
+

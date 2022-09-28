@@ -1,3 +1,13 @@
 # Secondary sampling unity
 
-Text
+- For each selected hexagon, a grid of small hexagons spaced of 294 meters are create to perform the secondary sampling (SSU).
+- For each SSU hexagon within the SSU, habitat pixels are extract to compute a new layer of habitat inclusion probability following the same approach used for the PSU.
+- A SSU is defined as available given the following rules:
+    - Must have 6 neighbours (less than that means it's a border SSU)
+    - Must have at least 1 - `prop_na` of non empty pixels
+    - 4 out 6 neighbours must also respect the above rule
+
+
+## Export of selected SSUs
+
+Describe how each code used to name each selected SSU and its replacement
