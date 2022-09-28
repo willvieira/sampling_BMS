@@ -1,6 +1,6 @@
 # Introduction
 
-Bref description of the project
+Brief description of the project.
 
 This report is separeted in two sections.
 The first section details the preparation of the layers needed by the GRTS algorithm.

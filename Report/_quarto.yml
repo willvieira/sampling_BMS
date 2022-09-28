@@ -19,6 +19,7 @@ book:
     - intro.qmd
     - part: Spatial data layers
       chapters:
+      - studyArea.qmd
       - habitat.qmd
       - cost.qmd
       - legacy.qmd

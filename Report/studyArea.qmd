@@ -1,0 +1,14 @@
+# Study area
+
+## Area of study
+
+## Ecoregion
+
+- List ecoregions used
+- List ecoregions excluded from study area
+
+## Hexagons
+
+- Only the hexagons in which their centroid fall into the study area are used.
+- Each hexagon is classified into one of the ecoregions following the same centroid rule.
+- 

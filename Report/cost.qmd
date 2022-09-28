@@ -1,3 +1,73 @@
 # Cost information
 
-Text
+Define a cost surface based on different methods to access the hexagons.
+
+## Layers of transportation
+
+### Roads
+
+### Trails
+
+### Train
+
+### Aeroports
+
+- filter infrastructure as being one of `Aéroport`, `Héliport` or `Aérodrome`.
+- filter `carburant == 'OUI'` but keep `Hydro-Quebec` and `Administration Régionale Kativik`.
+
+### Parameters
+
+```{r costPars, echo=FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+# TODO: load it automatically from script
+params <- list(
+  nb_arus = 5.0,
+  # Truck cost
+  truck_buffer = 1000, # meters
+  truck_cost_per_day = 600.0,
+  truck_n_crews	= 2.0,
+  truck_arus_per_crew_per_day	= 5.0,
+  # ATV cost
+  atv_buffer = 1000,
+  atv_cost_per_day = 1200.0,
+  atv_n_crews	= 2.0,
+  atv_arus_per_crew_per_day	= 3.0,
+  # Helicopter
+  helicopter_cost_per_hour = 1250.0,
+  helicopter_max_km_from_base	= 150.0,
+  helicopter_base_setup_cost_per_km =	9.0,
+  helicopter_l_per_hour = 160.0,
+  helicopter_crew_size = 4.0,
+  helicopter_aru_per_person_per_day	= 5.0,
+  helicopter_relocation_speed = 180.0,
+  helicopter_airport_cost_per_l	= 1.3,
+  helicopter_base_cost_per_l	= 5.0,
+  helicopter_2nd_base_cost_per_l = 10.0,
+  helicopter_hours_flying_within_sa_per_day	= 5.0
+)
+
+params |>
+    enframe(name = 'Parameter', value = 'Value') |>
+    mutate(Value = num(unlist(Value))) |>
+    kableExtra::kbl(format = 'markdown', align = 'c')
+```
+
+## Inclusion probability
+
+- Inclusion probability based on cost layers is calculated for the ensemble of the study area.
+- It takes into account the different layers of transportation across Quebec and the neighbour provinces.
+- Each layer has its own buffer range and cost of access.
+- Once the buffers and costs are defined, the lowest cost surface for the study area is calculated across all possible means of transportation.
+- We use the lowest cost surface to calculated a weighted average cost for each hexagon.
+- Given all available modes of transportation in a hexagon, the weighted average cost is defined as the average of the cost among these methods, weighted by their proportion in the hexagon.
+- For a hexagon $h$ and each method of tranportation $i$, its cost inclusion probability $P_{cost_{h}}$ is given by:
+
+$$
+    W_{\text{averge cost}_{h}} = \frac{\sum_{i=1}^{n} w_{i}Cost_{i}}{\sum_{i=1}^{n} w_i}
+$$
+
+$$
+    P_{cost_{h}} = \frac{1}{\sqrt{W_{\text{averge cost}_{h}}}}
+$$
+
+Where $w_i$ is the weight given by the proportion of the hexagon accessible by the method $i$.

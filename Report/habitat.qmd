@@ -1,3 +1,52 @@
 # Habitat information
 
-Text
+## Landcover Canada
+
+- Describe landcover codes
+- How landcover was modified to include more habitats
+- Transform Snow and ice, water, Urban, and cropland pixels to `NA`
+
+
+## Inclusion probability
+
+- Inclusion probability based on habitat type is calculated for each ecoregion individually
+- It takes into account the diversity of habitats and their relative frequency within an ecoregion
+- The inclusion probability $P$ of a habitat $i$ of an ecoregion $e$ is given by
+
+$$
+    P_{habitat_{i, e}} = \frac{\text{\# of habitat types}_{e}^{-1}}{\text{\# of pixels}_{i, e}}
+$$
+
+So the more pixels a habitat has in a ecoregion, the lower is its inclusion probability.
+Take, for instance, the frequency of pixels per habitat type for the ecoregion 102:
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+prev_all <- readRDS('../data/prev_all.RDS')
+prev_all |>
+    filter(ID_ecoregion == 102) |>
+    mutate(
+        `Habitat type` = code,
+        Frequency = freq
+    ) |>
+    select(`Habitat type`, Frequency) |>
+    kableExtra::kbl(format = 'markdown', align = 'c')
+```
+
+```{r get_incExample,echo = FALSE}
+prev_eco_ext <- prev_all |>
+    filter(ID_ecoregion == 102) |>
+    filter(freq %in% range(freq)) |>
+    mutate(Max = freq == max(freq))
+```
+
+The habitat `r prev_eco_ext |> filter(Max == TRUE) |> pull(code)` is the most frequent while the habitat `r prev_eco_ext |> filter(Max == FALSE) |> pull(code)` the least.
+Following the equation above, the inclusion probability of these two habitats are `r prev_eco_ext |> filter(Max == TRUE) |> pull(incl_prob) |> format(scientific = TRUE)` and `r prev_eco_ext |> filter(Max == FALSE) |> pull(incl_prob) |> format(scientific = TRUE)`, respectively.
+This means that the habitat `r prev_eco_ext |> filter(Max == FALSE) |> pull(code)` is more likeliky to be selected in a limited sampling when using these inclusion probabilities.
+
+Once inclusion probability for each habitat type of an ecoregion is defined, a summarised inclusion probability is calculated among all habitats within a specific hexagon.
+For each hexagon $h$ from an ecoregion $e$, their habitat inclusion probability is calculated from all habitat types $i$ following the equation:
+
+$$
+    P_{habitat_{h, e}} = \sum_{i=h_1}^{h_n} \text{\# of pixels}_{i, e} \times P_{habitat_{i, e}}
+$$
