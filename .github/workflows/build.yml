@@ -34,12 +34,16 @@ jobs:
             tidyverse
             kableExtra
 
+#       - name: Render Quarto Project
+#         uses: quarto-dev/quarto-actions/render@v2
+#         with:
+#           to: all
+#           path: Report
+
+
       - name: Render Quarto Project
-        uses: quarto-dev/quarto-actions/render@v2
-        with:
-          to: all
-          path: Report
-    
+        run: quarto render Report --to all
+
       - name: Deploy gh_pages
         uses: JamesIves/github-pages-deploy-action@releases/v3
         with:
