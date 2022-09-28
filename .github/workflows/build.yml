@@ -22,11 +22,9 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: Install dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
+      - uses: r-lib/actions/setup-renv@v2
         with:
-          packages: |
-            jsonlite
+          cache-version: 1
 
       - name: Render Quarto Project
         uses: quarto-dev/quarto-actions/render@v2
