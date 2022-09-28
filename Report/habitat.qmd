@@ -22,7 +22,7 @@ Take, for instance, the frequency of pixels per habitat type for the ecoregion 1
 
 ```{r, echo=FALSE}
 suppressPackageStartupMessages(library(tidyverse))
-prev_all <- readRDS('../data/prev_all.RDS')
+prev_all <- readRDS('data/prev_all.RDS')
 prev_all |>
     filter(ID_ecoregion == 102) |>
     mutate(
