@@ -22,27 +22,18 @@ jobs:
         with:
           use-public-rspm: true
 
-#       - uses: r-lib/actions/setup-renv@v2
-#         with:
-#           cache-version: 1
+      - name: Install spatial dependencies
+        run: sudo apt-get install libgdal-dev libproj-dev libgeos-dev libudunits2-dev netcdf-bin
 
-      - name: Install dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
+      - uses: r-lib/actions/setup-renv@v2
         with:
-          packages: |
-            jsonlite
-            tidyverse
-            kableExtra
-
-#       - name: Render Quarto Project
-#         uses: quarto-dev/quarto-actions/render@v2
-#         with:
-#           to: all
-#           path: Report
-
+          cache-version: 1
 
       - name: Render Quarto Project
-        run: quarto render Report --to all
+        uses: quarto-dev/quarto-actions/render@v2
+        with:
+          to: all
+          path: Report
 
       - name: Deploy gh_pages
         uses: JamesIves/github-pages-deploy-action@releases/v3
