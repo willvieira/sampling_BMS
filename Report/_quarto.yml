@@ -13,7 +13,6 @@ book:
   downloads: [pdf]
   sharing: [twitter]
   cover-image: cover.png
-  output-dir: docs
   chapters:
     - index.qmd
     - intro.qmd
