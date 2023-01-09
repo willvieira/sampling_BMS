@@ -11,7 +11,7 @@ Legacy sites are existing or historical surveys with data extracted from randoml
 The key reason for integrating legacy or iconic sites in the sampling design is to keep a representative sample of the community while reducing the sample cost.
 This is especially important in Quebec, as there are many historical data in the southern part of the province.
 Considering legacy sites in well-covered regions allows us to allocate ressources to remote areas with less data and higher sampling costs.
-In section #legacy-sites, we detail a novel approach accounting for the number and distribution of legacy and iconic sites to reduce sample size and maintain a representative sample of habitat types.
+In @sec-legacy-sites, we detail a novel approach accounting for the number and distribution of legacy and iconic sites to reduce sample size and maintain a representative sample of habitat types.
 
 Once habitat types, cost constraints, and legacy sites are defined, the BOSS design uses the Generalized Random Tessellation Stratified Sampling (GRTS; @stevens2004spatially) method to perform the random sampling.
 This is a widely used approach to ensure spatially balanced samples in a region.
