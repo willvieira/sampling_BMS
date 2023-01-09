@@ -1,12 +1,31 @@
 # Introduction
 
-Brief description of the project.
+This project is part of a nationwide effort to monitor the status of birds in the underrepresented boreal region.
+In this report we describe the Quebec adaptation of the Boreal Optimal Sampling Strategy (BOSS).
+The BOSS design is a hierachical sampling approach stratified by ecoregions, habitat types, and cost constraits [@Wilgenburg2020].
+This structured design provides a spatially balanced coverage while accounting for rare habitats and sample cost.
+Here, we focus on the adaptation of the design for the Quebec province; for a thorough explanation and discussion of the national strategy, see @Wilgenburg2020.
 
-This report is separeted in two sections.
-The first section details the preparation of the layers needed by the GRTS algorithm.
-The second section details how the PSU and SSU sampled were performed using the GRTS approach.
-In the appendices, I describe the simulations performed to adjust the national approach to the Quebec province.
+In addition to stratifying the sampling based on habitat distribution and cost constraits, the BOSS design includes a function to take legacy sites and iconic sites into account.
+Legacy sites are existing or historical surveys with data extracted from randomly selected sites, whereas iconic sites are from non-randomly selected sites.
+The key reason for integrating legacy or iconic sites in the sampling design is to keep a representative sample of the community while reducing the sample cost.
+This is especially important in Quebec, as there are many historical data in the southern part of the province.
+Considering legacy sites in well-covered regions allows us to allocate ressources to remote areas with less data and higher sampling costs.
+In section #legacy-sites, we detail a novel approach accounting for the number and distribution of legacy and iconic sites to reduce sample size and maintain a representative sample of habitat types.
 
-## GRTS algorithm
+Once habitat types, cost constraints, and legacy sites are defined, the BOSS design uses the Generalized Random Tessellation Stratified Sampling (GRTS; @stevens2004spatially) method to perform the random sampling.
+This is a widely used approach to ensure spatially balanced samples in a region.
+The GRTS uses a mapping function to transform two-dimensional space into one-dimensional space with an ordered spatial address.
+This one-dimensional ordered space is then randomly reordered before the sampling.
+This random reordering of the linear, one-dimensional space ensures a spatially well-balanced sample, whatever the sample size.
+After being sampled, this one-dimensional space is then mapped back to the original two-dimensional space.
 
-Describe algo and its source [@Wilgenburg2020].
+This report is divided into two main sections.
+The first section details the spatial layers to feed the GRTS algorithm.
+We begin by describing the study area in the Quebec province, the selected ecoregions, and the Primary Sample Unit (PSU).
+We then detail de habitat and cost layers to weight the inclusion probabilities.
+Finally, we dedicate a complete section to describe the simulations used to create the new method to account for legacy and iconic sites.
+The first section contains most of the steps that have been regionalized for Quebec.
+The second section details the sample steps using the GRTS algorithm.
+We first show the method to calculate the stratified sample size for each ecoregion.
+We then detail the use of the GRTS to sample the PSUs and the Secondary Sample Unit (SSU).
