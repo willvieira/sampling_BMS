@@ -1,16 +1,164 @@
 # Study area
 
+```{r loadAreaEcoz,echo=FALSE,message=FALSE,warning=FALSE}
+suppressPackageStartupMessages(library(sf))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(ggspatial))
+
+area = readRDS(file.path('..', 'data', 'area.RDS'))
+ecoz = read_sf(file.path('data', 'Ecozones', 'ecozones.shp')) |>
+    st_transform(st_crs(area)) |>
+    st_intersection(area) |>
+    mutate(Ecozone = ZONE_NAME) |>
+    select(Ecozone)
+prov = readRDS(file.path('data', 'province.RDS'))
+ecor = readRDS(file.path('..', 'data', 'districts.RDS'))
+```
+
 ## Area of study
 
-- Polygon of study area
+The study area for Quebec is outlined in @fig-study-area.
+It was expanded beyond the Boreal boundary to include the Arctic ecosystems.
+The study area contains a total of 7 ecoregions, and their sizes and proportions are described in @tbl-ecozone:
+
+```{r tableEcoz,echo=FALSE,message=FALSE,warning=FALSE}
+#| label: tbl-ecozone
+#| tbl-cap: "Area (in hectares) and proportion of ecozones covered by the study area."
+
+eco_name = unique(ecoz$Ecozone)
+eco_size = st_area(ecoz)
+# merge same ecozone splited in two polygons
+eco_size = c(eco_size[1:6], sum(eco_size[7:8]))
+units(eco_size) = NULL
+tibble(
+    Ecozone = eco_name,
+    Siz = eco_size
+) |>
+arrange(desc(Siz)) |>
+mutate(
+    `Area (% prop)` = paste0(
+        round(Siz/10000, 0),
+        ' (',
+        round(Siz/sum(Siz) * 100, 2),
+        ')'
+    )
+) |>
+select(-Siz) |>
+    kbl(format = 'markdown', align = 'c')
+```
+
+```{r printStudyArea,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7.5,fig.height=7.5}
+#| label: fig-study-area
+#| fig-cap: "Study area (colored polygons) and its ecozone. The ecozone map was extracted from the Terrestrial Ecoregions of Canada data product - Government of Canada; Agriculture and Agri-Food Canada."
+
+prov |>
+    ggplot() +
+        geom_sf() +
+        geom_sf(data = area, fill = 'gray') +
+        geom_sf(data = ecoz, aes(fill = Ecozone), alpha = .5) +
+        geom_sf_label(
+            data = ecoz[-nrow(ecoz), ],
+            aes(label = Ecozone),
+            nudge_y = -.3,
+            label.size = 0.1
+        ) +
+        coord_sf(crs = 4326) +
+        annotation_north_arrow(
+            location = 'br',
+            which_north = 'true'
+        ) +
+        theme_minimal() +
+        theme(legend.position = 'none') +
+        xlab('') + ylab('')
+```
 
 ## Ecoregion
 
-- List ecoregions used
-- List ecoregions excluded from study area
+The ecoregion is the first level of aggregation in the sampling design.
+The sample size and habitat inclusion probability (described in the following sections) are defined for each separate ecoregion.
+There are a total of `r length(ecor$ECOREGION)` ecoregions in the study area (@fig-ecoregion), and their details are described in @tbl-ecoregion.
+Ecoregion 131 was excluded from the study area because it was too small to support enough sampling points for a random sampling design.
+
+```{r tableEcoz,echo=FALSE,message=FALSE,warning=FALSE}
+#| label: tbl-ecoregion
+#| tbl-cap: Area (in hectares) and proportion of ecozones covered by the study area.
+
+size_eco = st_area(ecor)
+units(size_eco) = NULL
+ecor |>
+mutate(
+    Code = ECOREGION,
+    Name = REGION_NAM,
+    Siz = size_eco
+) |>
+arrange(desc(Siz)) |>
+mutate(
+    `Area (% prop)` = paste0(
+        round(Siz/10000, 0),
+        ' (',
+        round(Siz/sum(Siz) * 100, 2),
+        ')'
+    )
+) |>
+st_drop_geometry() |>
+select(Code, Name, `Area (% prop)`) |>
+kbl(format = 'markdown', align = 'c')
+```
+
+
+```{r printEcoregion,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+#| label: fig-ecoregion
+#| fig-cap: "Ecoregions (code) of the study area. Code description is detailed in @tbl-ecoregion."
+
+ecor |>
+    select(ECOREGION) |>
+    ggplot() +
+        geom_sf() +
+        geom_sf_label(
+            aes(label = ECOREGION),
+            label.size = 0.1
+        ) +
+        coord_sf(crs = 4326) +
+        theme_minimal() +
+        theme(legend.position = 'none') +
+        xlab('') + ylab('')
+```
 
 ## Hexagons
 
-- Only the hexagons in which their centroid fall into the study area are used.
-- Each hexagon is classified into one of the ecoregions following the same centroid rule.
+Similarly to the BOSS design, we used the 5 km diameter hexagon as the Primary Sampling Unit (PSU).
+This is the lowest level of aggregation before performing the stratified sample with the GRTS algorithm.
+We selected only the hexagons in which their centroid fall into the study area.
+Each hexagon is classified into one of the ecoregions following the same centroid rule.
+@fig-eco131 shows an example of the selection approach.
 
+```{r printEco131,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7.5,fig.height=7.5}
+#| label: fig-eco131
+#| fig-cap: "Distribution of selected (green) and non-selected (red) hexagons as a function of whether or not their respective centroid falls within the ecoregion (shaded area). The illustration uses the ecoregion 131 - Iles-de-la-Madeleine as an example."
+
+hex_131 <- readRDS(file.path('data', 'eco_131_exampleHexagonSelection.RDS')) |>
+    filter(Area > 16.3)
+
+ecor |>
+    filter(ECOREGION == 131) |>
+    ggplot() +
+        geom_sf(fill = 'black', color = 'black') +
+        geom_sf(data = hex_131, aes(alpha = 0.2, fill = isEco)) +
+        geom_sf(data = hex_131 |> st_centroid())+  
+        coord_sf(crs = 4326) +
+        theme_minimal() +
+        theme(legend.position = 'none') +
+        xlab('') + ylab('')
+
+hex_131 |>
+    ggplot(aes(color = 'isEco')) +
+        geom_sf() +
+        geom_sf(data = hex_131 |> st_centroid()) +
+        geom_sf(data = ecor |> filter(ECOREGION == 131), aes(alpha = 0.5)) +
+        coord_sf(crs = 4326) +
+        theme_minimal() +
+        theme(legend.position = 'none') +
+        xlab('') + ylab('')
+```
