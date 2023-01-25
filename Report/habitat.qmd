@@ -1,28 +1,70 @@
 # Habitat information
 
-## Landcover Canada
+## Land cover
 
-- Describe landcover codes
-- How landcover was modified to include more habitats
-- Transform Snow and ice, water, Urban, and cropland pixels to `NA`
+To control for relative frequency of habitats within each ecoregion, we used the Land cover Canada and Land cover Quebec.
+Both layers have habitat classes at a resolution of 30 meter pixel.
+The Land cover of Quebec (*source?*) has 10 extra classes of habitat when compared to the Land cover of Canada and is, therefore, more precise to control for habitat heterogeneity.
+However, the spatial extension of this layer does not cover all the study area.
+To avoid conflit of different sources of information within a ecoregion, the Land cover of Quebec was only used when it covered the total area of the ecoregion [@fig-ecoregion-hab].
+For the remaining ecoregions, we used the Land cover of Canada, version 2015 [@latifovic201620].
+Following the BOSS design, for both Land cover layers the Snow and ice, water, Urban, and cropland classes were excluded to keep only the classes of interest for the sampling design.
 
+```{r ecoLand,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+#| label: fig-ecoregion-hab
+#| fig-cap: "Ecoregions using Land cover Canada (red) or Land cover Quebec (blue)."
+suppressPackageStartupMessages(library(sf))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(ggplot2))
+
+ecor = readRDS(file.path('..', 'data', 'districts.RDS'))
+
+eco_land_ca <- c(28, 30, 46, 48, 49, 78, 86, 216)
+ecor |>
+    select(ECOREGION) |>
+    mutate(
+        `Land use` = ifelse(ECOREGION %in% eco_land_ca, 'Land cover Canada', 'Land cover Quebec')
+    ) |>
+    ggplot() +
+        geom_sf(aes(fill = `Land use`)) +
+        geom_sf_label(
+            aes(label = ECOREGION),
+            label.size = 0.1
+        ) +
+        coord_sf(crs = 4326) +
+        theme_minimal() +
+        theme(legend.position = 'none') +
+        xlab('') + ylab('')
+```
 
 ## Inclusion probability
 
-- Inclusion probability based on habitat type is calculated for each ecoregion individually
-- It takes into account the diversity of habitats and their relative frequency within an ecoregion
-- The inclusion probability $P$ of a habitat $i$ of an ecoregion $e$ is given by
+Inclusion probability based on habitat type was calculated for each ecoregion individually.
+Within an ecoregion, it considers the number of habitats and their relative frequency.
+Let $C(i, e)$ be the number of pixels from an ecoregion $e$ that are equal to the habitat $i$ and $\# H$ be the number of habitat classes.
+Then, the inclusion probability of a habitat within an ecoregion ($P_{i, e}$) is given by
 
 $$
-    P_{habitat_{i, e}} = \frac{\text{\# of habitat types}_{e}^{-1}}{\text{\# of pixels}_{i, e}}
+    P_{i, e} = \frac{\#H^{-1}}{C(i, e)}
 $$
 
-So the more pixels a habitat has in a ecoregion, the lower is its inclusion probability.
+As a result, the likelihood of a habitat being included decreases as the number of pixels increases.
+This weighted inclusion probability ensures that rare and abundant habitats are equally likely to be chosen.
+
+Finally, the inclusion probability of each hexagon is calculated by taking into account the inclusion probability and the relative frequency of each habitat found within the hexagon.
+For each hexagon $h$ from an ecoregion $e$, their habitat inclusion probability is calculated from all habitat types $i$ following the equation:
+
+$$
+    P_{h, e} = \sum_{i=H_1}^{H} C(i, e) \times P_{i, e}
+$$
+
+## Example: Ecoregion 102
+
 Take, for instance, the frequency of pixels per habitat type for the ecoregion 102:
 
 ```{r, echo=FALSE}
 suppressPackageStartupMessages(library(tidyverse))
-prev_all <- readRDS('data/prev_all.RDS')
+prev_all <- readRDS(file.path('data', 'prev_all.RDS'))
 prev_all |>
     filter(ID_ecoregion == 102) |>
     mutate(
@@ -42,11 +84,63 @@ prev_eco_ext <- prev_all |>
 
 The habitat `r prev_eco_ext |> filter(Max == TRUE) |> pull(code)` is the most frequent while the habitat `r prev_eco_ext |> filter(Max == FALSE) |> pull(code)` the least.
 Following the equation above, the inclusion probability of these two habitats are `r prev_eco_ext |> filter(Max == TRUE) |> pull(incl_prob) |> format(scientific = TRUE)` and `r prev_eco_ext |> filter(Max == FALSE) |> pull(incl_prob) |> format(scientific = TRUE)`, respectively.
-This means that the habitat `r prev_eco_ext |> filter(Max == FALSE) |> pull(code)` is more likeliky to be selected in a limited sampling when using these inclusion probabilities.
+This means that although habitat `r prev_eco_ext |> filter(Max == TRUE) |> pull(code)` is `r prev_eco_ext |> summarise(r = round(freq[Max == TRUE]/freq[Max == FALSE],0)) |> pull(r)` times more frequent than habitat `r prev_eco_ext |> filter(Max == FALSE) |> pull(code)`, they are equally likely to be sampled.
+For a visual example, we show the relative proportion of habitat from a sample of 10 hexagons with and without inclusion probability @fig-sample_habitat.
 
-Once inclusion probability for each habitat type of an ecoregion is defined, a summarised inclusion probability is calculated among all habitats within a specific hexagon.
-For each hexagon $h$ from an ecoregion $e$, their habitat inclusion probability is calculated from all habitat types $i$ following the equation:
+```{r sampleHabitat,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+#| label: fig-sample-habitat
+#| fig-cap: "Example of sampling 10 (2%) hexagons in ecoregion 102 with (left bar) and without (right) eeighted probability accounting for habitat heterogenity. Eeach bar represents the relative proportion of habitat classes from the 10 selected hexagons."
 
-$$
-    P_{habitat_{h, e}} = \sum_{i=h_1}^{h_n} \text{\# of pixels}_{i, e} \times P_{habitat_{i, e}}
-$$
+habitat_colors <- c(land_1 = rgb(0, 61, 0, maxColorValue = 255),
+                    land_2 = rgb(148, 156, 112, maxColorValue = 255),
+                    land_5 = rgb(20, 140, 61, maxColorValue = 255),
+                    land_6 = rgb(92, 117, 43, maxColorValue = 255),
+                    land_8 = rgb(179, 138, 51, maxColorValue = 255),
+                    land_10 = rgb(225, 207, 138, maxColorValue = 255),
+                    land_11 = rgb(156, 117, 84, maxColorValue = 255),
+                    land_12 = rgb(186, 212, 143, maxColorValue = 255),
+                    land_13 = rgb(64, 138, 112, maxColorValue = 255),
+                    land_14 = rgb(107, 163, 138, maxColorValue = 255),
+                    land_16 = rgb(168, 171, 174, maxColorValue = 255),
+                    land_21 = '#03045e',
+                    land_22 = '#023e8a',
+                    land_23 = '#0077b6',
+                    land_24 = '#0096c7',
+                    land_25 = '#00b4d8',
+                    land_26 = '#48cae4',
+                    land_27 = '#90e0ef',
+                    land_28 = '#ade8f4',
+                    land_29 = '#caf0f8',
+                    land_30 = '#E6FFFF')
+
+hex102 = read_sf(file.path('..', 'output', 'anticosti_island_102', 'hexa_102.shp'))
+nSample = round(nrow(hex102) * 0.02, 0)
+
+set.seed(3)
+sample_random = sample(hex102$ET_Index, nSample)
+sample_prob = sample(hex102$ET_Index, nSample, prob = hex102$hab_prob)
+
+hex102 |>
+    st_drop_geometry() |>
+    select(ET_Index, contains('land_ca')) |>
+    pivot_longer(cols = contains('land_ca')) |>
+    mutate(name = str_replace(pattern = 'ca_', replacement = '', name)) |>
+    filter(ET_Index %in% c(sample_random, sample_prob)) |>
+    mutate(
+        sampled = factor(
+            ifelse(
+                ET_Index %in% sample_random,
+                'Random sample',
+                ifelse(ET_Index %in% sample_prob, 'Weighted sampled', 'WRONG!')
+            )
+        )
+    ) |>
+    ggplot(aes(sampled, y = value, fill = name)) +
+        geom_col(position = 'fill') +
+        scale_y_continuous(labels = scales::percent) +
+        scale_fill_manual(values = habitat_colors) +
+        theme_minimal() +
+        xlab('Habitat propotion of selected hexagons') +
+        ylab('')
+
+```
