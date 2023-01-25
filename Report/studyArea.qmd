@@ -151,14 +151,4 @@ ecor |>
         theme_minimal() +
         theme(legend.position = 'none') +
         xlab('') + ylab('')
-
-hex_131 |>
-    ggplot(aes(color = 'isEco')) +
-        geom_sf() +
-        geom_sf(data = hex_131 |> st_centroid()) +
-        geom_sf(data = ecor |> filter(ECOREGION == 131), aes(alpha = 0.5)) +
-        coord_sf(crs = 4326) +
-        theme_minimal() +
-        theme(legend.position = 'none') +
-        xlab('') + ylab('')
 ```
