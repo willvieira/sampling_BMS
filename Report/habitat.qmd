@@ -17,7 +17,7 @@ suppressPackageStartupMessages(library(sf))
 suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(ggplot2))
 
-ecor = readRDS(file.path('..', 'data', 'districts.RDS'))
+ecor = readRDS(file.path('data', 'districts.RDS'))
 
 eco_land_ca <- c(28, 30, 46, 48, 49, 78, 86, 216)
 ecor |>
@@ -113,7 +113,7 @@ habitat_colors <- c(land_1 = rgb(0, 61, 0, maxColorValue = 255),
                     land_29 = '#caf0f8',
                     land_30 = '#E6FFFF')
 
-hex102 = read_sf(file.path('..', 'output', 'anticosti_island_102', 'hexa_102.shp'))
+hex102 = readRDS(file.path('data', 'hex102.RDS'))
 nSample = round(nrow(hex102) * 0.02, 0)
 
 set.seed(3)
