@@ -1,0 +1,41 @@
+# A new approach to integrate legacy and iconic sites in spatially balanced designs
+
+## Theoretical description
+
+```{r loadPackages_legacyMethod, echo = FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(spatstat))
+suppressPackageStartupMessages(library(sf))
+suppressPackageStartupMessages(library(spsurvey))
+suppressPackageStartupMessages(library(MBHdesign))
+suppressPackageStartupMessages(library(ggtext))
+```
+
+```{r adj_sampleSize,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+#| label: fig-adj-sampleSize
+#| fig-cap: "Grid of sample units and historical sites (red dots) for a simulated region. Using the same approach for adjusting the inclusion probability, a buffer around each historical site is created to calculate the adjusted sampled size."
+
+sfc = st_sfc(st_polygon(list(rbind(c(0,0), c(8,0), c(8,8), c(0,0)))))
+fake_hex <- st_make_grid(sfc, cellsize = .1, square = FALSE)
+set.seed(3)
+legacy <- fake_hex[sample(1:length(fake_hex), 20)]
+
+ggplot(fake_hex) +
+    geom_sf() +
+    geom_sf(data = legacy, fill = 'red', color = 'transparent') +
+    geom_sf(data = st_union(st_buffer(legacy, dist = 0.7)), fill = 'red', color = 'transparent', alpha = .5) +
+    ggtitle('Sample size = 153; Legacy sites = 20')
+
+```
+
+
+## Example with ecoregions 101S and 217
+
+
+
+## Limitations
+
+- More simulations may be necessary to fine tune the parameters to optimal design
+- We account only for spatial coverage adjusting for the sample size
+- This approach could also be extended to take habitat distribution into account
+

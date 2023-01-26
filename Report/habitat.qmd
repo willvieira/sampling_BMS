@@ -6,7 +6,7 @@ To control for relative frequency of habitats within each ecoregion, we used the
 Both layers have habitat classes at a resolution of 30 meter pixel.
 The Land cover of Quebec (*source?*) has 10 extra classes of habitat when compared to the Land cover of Canada and is, therefore, more precise to control for habitat heterogeneity.
 However, the spatial extension of this layer does not cover all the study area.
-To avoid conflit of different sources of information within a ecoregion, the Land cover of Quebec was only used when it covered the total area of the ecoregion [@fig-ecoregion-hab].
+To avoid conflit of different sources of information within a ecoregion, the Land cover of Quebec was only used when it covered the total area of the ecoregion (@fig-ecoregion-hab).
 For the remaining ecoregions, we used the Land cover of Canada, version 2015 [@latifovic201620].
 Following the BOSS design, for both Land cover layers the Snow and ice, water, Urban, and cropland classes were excluded to keep only the classes of interest for the sampling design.
 

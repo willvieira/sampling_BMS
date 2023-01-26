@@ -2,3 +2,4 @@
 
 - Sample effort for an ecoregion is defined to 2% of available hexagons
 - Hexagons within an ecoregions need at least 20% of its area to be covered in natural habitats
+- Specify that all ecoregions has to have at least 2 hexagons to be sampled

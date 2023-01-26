@@ -21,7 +21,9 @@ book:
       - studyArea.qmd
       - habitat.qmd
       - cost.qmd
+    - part: Legacy sites
       - legacy.qmd
+      - legacyMethod.qmd
     - part: Sampling algorithm
       chapters:
       - sampleSize.qmd
