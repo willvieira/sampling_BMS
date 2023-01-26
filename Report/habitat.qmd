@@ -85,7 +85,7 @@ prev_eco_ext <- prev_all |>
 The habitat `r prev_eco_ext |> filter(Max == TRUE) |> pull(code)` is the most frequent while the habitat `r prev_eco_ext |> filter(Max == FALSE) |> pull(code)` the least.
 Following the equation above, the inclusion probability of these two habitats are `r prev_eco_ext |> filter(Max == TRUE) |> pull(incl_prob) |> format(scientific = TRUE)` and `r prev_eco_ext |> filter(Max == FALSE) |> pull(incl_prob) |> format(scientific = TRUE)`, respectively.
 This means that although habitat `r prev_eco_ext |> filter(Max == TRUE) |> pull(code)` is `r prev_eco_ext |> summarise(r = round(freq[Max == TRUE]/freq[Max == FALSE],0)) |> pull(r)` times more frequent than habitat `r prev_eco_ext |> filter(Max == FALSE) |> pull(code)`, they are equally likely to be sampled.
-For a visual example, we show the relative proportion of habitat from a sample of 10 hexagons with and without inclusion probability @fig-sample_habitat.
+For a visual example, we show the relative proportion of habitat from a sample of 10 hexagons with and without inclusion probability @fig-sample-habitat.
 
 ```{r sampleHabitat,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
 #| label: fig-sample-habitat
