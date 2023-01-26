@@ -22,6 +22,7 @@ book:
       - habitat.qmd
       - cost.qmd
     - part: Legacy sites
+      chapters:
       - legacy.qmd
       - legacyMethod.qmd
     - part: Sampling algorithm
