@@ -3,12 +3,12 @@
 In this section we discuss our approach to account for legacy and iconic sites in the sampling design.
 Legacy sites are historical or current surveys in which locations were randomly chosen, in contrast to iconic sites, which are obtained from non-random surveys.
 These sites are particularly important in Quebec, where there are a large number of legacy and iconic sites (@fig-legacy-sites).
-Given the high cost of sampling in remote regions and the limited resources available to sample, it is essential to take legacy and iconic sites into account in order to make the most efficient use of limited resources to extend spatial coverage to under-sampled areas.
+Given the high cost of sampling in remote regions and the limited resources available to sample, it is essential to take historical sites into account in order to make the most efficient use of limited resources to extend spatial coverage to under-sampled areas.
 
 The latest method to integrate legacy and iconic sites is developed in @Foster2021.
 They use the position of each historical site to reduce the inclusion probability of neighboring sites following a kernel distribution, where the legacy effect decreases with distance from a historical site.
 However, their approach to incorporate legacy and iconic sites do not explicitly consider the amount of historical sites, nor the spatial randomness of their distribution.
-In fact, their approach naturally ensures random historical sites, as they use only legacy sites while excluding iconic ones.
+In fact, their approach naturally ensures randomnly selected sites, as they use only legacy sites while excluding iconic ones.
 They justify the exclusion of iconic sites, since these sites are usually special cases that may not represent the population and therefore generate a biased sample.
 Although we agree with the authors, we prioritised expanding the spatial coverage of samples by reducing the sample size of regions that have been well covered by legacy and iconic sites.
 
@@ -19,7 +19,31 @@ Finally, we briefly describe previous experimentations to incorporate historical
 
 ## Historical sites in Quebec
 
-*Figure with all legacy and iconic sites*
+```{r legacyFigure,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(sf))
+suppressPackageStartupMessages(library(ggtext))
+
+# load layers
+area = readRDS(file.path('data', 'area.RDS'))
+
+legacy <- read_csv(file.path('Report', 'data', 'legacySites.csv')) |>
+        st_as_sf(
+            coords = c('longitude', 'latitude'),
+            crs = st_crs(4326)
+        ) |>
+        mutate(Source = str_replace(Source, "'", ""))
+
+#plot
+area |>
+    ggplot() +
+    geom_sf(color = 'grey') +
+    geom_sf(data = legacy, aes(color = Source), size = .5) +
+    coord_sf(crs = 4326) +
+    theme_minimal() +
+    xlab('') + ylab('')
+```
+
 
 ## Why should we consider sample size?
 
@@ -27,12 +51,6 @@ Here we show an example using two ecoregions in which historical sites have diff
 While the ecoregion 101S has evenly distributed historical sites over space, the ecoregion 217 present most of its historical sites around roads.
 
 ```{r importLegacy, echo=FALSE}
-suppressPackageStartupMessages(library(tidyverse))
-suppressPackageStartupMessages(library(spatstat))
-suppressPackageStartupMessages(library(sf))
-suppressPackageStartupMessages(library(spsurvey))
-suppressPackageStartupMessages(library(MBHdesign))
-suppressPackageStartupMessages(library(ggtext))
 
 # parameters
 
