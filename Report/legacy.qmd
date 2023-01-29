@@ -20,14 +20,18 @@ Finally, we briefly describe previous experimentations to incorporate historical
 ## Historical sites in Quebec
 
 ```{r legacyFigure,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+#| label: fig-legacy-sites
+#| fig-cap: "Legacy and historical sites from the study area."
+
 suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(sf))
+suppressPackageStartupMessages(library(spsurvey))
 suppressPackageStartupMessages(library(ggtext))
 
 # load layers
-area = readRDS(file.path('data', 'area.RDS'))
+area <- readRDS(file.path('..', 'data', 'area.RDS'))
 
-legacy <- read_csv(file.path('Report', 'data', 'legacySites.csv')) |>
+legacy <- read_csv(file.path('..', 'data', 'legacySites.csv'), show_col_types = FALSE) |>
         st_as_sf(
             coords = c('longitude', 'latitude'),
             crs = st_crs(4326)
@@ -47,221 +51,130 @@ area |>
 
 ## Why should we consider sample size?
 
-Here we show an example using two ecoregions in which historical sites have different spatial distribution.
-While the ecoregion 101S has evenly distributed historical sites over space, the ecoregion 217 present most of its historical sites around roads.
+Here, we discuss why changing inclusion probability alone is insufficient by comparing two ecoregions with oposite spatial distributions of historical sites.
+While the ecoregion 99 has evenly distributed historical sites over space, the ecoregion 217 present most of its historical sites around roads.
+We begin by outlining the method for reducing the inclusion probability of sites near legacy sites from @Foster2021, which we then apply to the two contrasting ecoregions.
 
-```{r importLegacy, echo=FALSE}
+Every PSU hexagon is assigend an inclusion probability as a function of habitat and access cost.
+The effect of a legacy site ($l$) on the inclusion probability of neighbouring hexagons ($h$) is derived from the Euclidean distance between $h$ and $l$ ($d(h, l)$), and the amplitude effect $\sigma$ using a Gaussian function.
+@fig-foster-gaussian shows the one-dimensional effect of increasing values of $\sigma$ on the inclusion probability of neighbouring sites.
 
-# parameters
+```{r fosterGaussian,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=6}
+#| label: fig-foster-gaussian
+#| fig-cap: "Legacy effect in the inclusion probabiity of neighbouring sites in function their Euclian distance. Each line represents the effect range of legacy sites."
 
-# Maximum proportion of NA pixels (non-habitat) in a hexagon
-# if 0.8, it means an hexagon has to have at least 20% of habitat pixels
-prop_na = 0.8
-
-# Percentage of hexagons to cover a region
-sample_effort = 0.02
-
-# Total sample size for SSU (Main + Over)
-# It must be a even number
-ssu_N = 6
-
-# Number of replications when running the GRTS
-nb_rep = 15
-
-# Ecoregions
-eco_sim <- c(
-    '7', '28', '30', '31',
-    '46', '47', '48', '49',
-    '73', '77', '78', '86',
-    '72', '74', '75', '76',
-    '96', #'96N', '96S',
-    '99',
-    '100', #'100N', '100S',
-    '101', '101N', '101S',
-    '102',
-    '103', #'103N', '103S',
-    '117',
-    '216',
-    '217'#, '217N', '217S'
-)
-
-# Buffer size (in Km) to adjust sample size given nb of legacy sites
-bufferSize_N = 18
-
-# Buffer size (in Km) to adjust inclusion probability around legacy sites
-bufferSize_p = 10
-
-
-
-# Prepare hexagons
-
-hexas <- readRDS(file.path('data', 'hexa_complete.RDS')) |>
-    filter(propNA <= prop_na) |>
-    filter(ecoregion %in% eco_sim) |>
-    mutate(
-        p = (hab_prob * cost_prob) / sum(hab_prob * cost_prob)
-    ) |>
-    filter(p != 0)
-
-#
-
-
-
-# legacy sites
-
-# function to transform Latitude & longitude legacy site points in a table
-# with the number of points per hexagon ID (ET_Index)
-import_legacySites <- function(File, lat_name, lon_name)
-{
-    hx <- hexas %>%
-        st_transform(4326)
-    
-    # read file
-    lg <- read_csv(File) %>%
-        rename(
-            lat = all_of(lat_name),
-            lon = all_of(lon_name)
-        ) %>%
-        st_as_sf(
-            coords = c('lon', 'lat'),
-            crs = st_crs(hx)
-        )
-
-    # intersect
-    nbLegacy <- hx %>%
-        st_contains(lg, sparse = FALSE) %>%
-        apply(1, sum)
-
-    tibble(
-        ET_Index = hx$ET_Index,
-        legacyNew = nbLegacy
-    ) %>%
-    filter(legacyNew > 0)
-}
-
-
-# load and transform legacy info
-legacySites <- import_legacySites(
-    File = file.path('data', 'SitesLegacy_GRTS20220314.csv'),
-    lat_name = 'Lat_DegDecValide',
-    lon_name = 'Long_DegDecValide'
-)
-
-# merge to hexagons
-hexas <- hexas %>%
-    left_join(legacySites) %>%
-    mutate(
-        legacyNew = replace_na(legacyNew, 0),
-        legacy = legacySite + legacyNew
-    )
+# exp function
+gausFunc = function(dist, sigma) return ( exp(-dist^2/sigma^2) )
+# Diff parameter values
+sigmas = c(1000, 4000, 6000, 10000, 15000, 20000)
+# viz
+tibble(Dist = seq(1, 40000, 100)) |>
+    expand_grid(sigma = sigmas) |>
+    mutate(eff = gausFunc(Dist, sigma)) |>
+    ggplot(aes(x = Dist, y = eff, color = as.factor(sigma))) +
+        geom_line(size = 1.1) +
+        theme_minimal() +
+        xlab('Distance from legacy site (m)') + ylab('Legacy site effect') +
+        scale_colour_viridis_d(guide = guide_legend(title = expression("" ~ sigma ~ "")))
 ```
 
-Sampling using a spatially balanced design while ignores historical sites for the two ecoregions:
+The method to reduce the inclusion probability of neighbouring sites near legacy sites developed in @Foster2021 is implimented in the R package `MBHdesign`.
+We redrew their illustration using a simulated grid landscape with three legacy sites to ilustrate the effect of increasing the $\sigma$ parameter on the inclusion probability of adjacent sites (@fig-foster-landscape).
+
+```{r legacyExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=8}
+#| label: fig-foster-landscape
+#| fig-cap: "Legacy effect in the inclusion probabiity of neighbouring sites in function their Euclian distance. Each line represents the effect range of legacy sites."
+
+#number of samples
+n <- 10
+#number of points to sample from
+N <- 100^2
+#the sampling grid (offset so that the edge locations have same area)
+offsetX <- 1/(2*sqrt( N))
+my.seq <- seq(from=offsetX, to=100000-offsetX, length=sqrt(N))
+X <- expand.grid( my.seq, my.seq)
+#the legacy sites (three of them)
+set.seed(10)
+legacySites <- matrix(sample(1:100000, 6, replace = FALSE), ncol = 2, byrow = TRUE)
+#names can be useful
+colnames(X) <- colnames( legacySites) <- c("X1","X2")
+
+#non-uniform inclusion probabilities
+inclProbs <- 1-exp(-X[,1]/100000)
+#scaling to enforce summation to n
+inclProbs <- n * inclProbs / sum( inclProbs)
+
+# adj according to different values of sigma
+sigmas <- c(2000, 10000, 40000)
+
+incl_ls <- readRDS(file.path('data', 'inclPorb_figFoster.RDS'))
+
+par(mfrow = c(2, 2), mar = c(0.5, 0.5, 1.5, 0.5), oma = c(1.5, 1.5, .5, 0), mgp = c(1.2, 0.2, 0), tck = -.008, cex = 0.8)
+for(i in 1:length(incl_ls)) {
+    plot(X, pch = 19, cex = 1.2, col = viridis::viridis(N)[rank(incl_ls[[i]])], 
+    xlab = '', ylab = '', xaxt = 'n', yaxt = 'n')
+    axis(1, labels = F)
+    axis(2, labels = F)
+    mtext(names(incl_ls)[i], 3, line = 0) 
+    points(legacySites, pch = 21, bg = 'grey', cex = 1.5)
+}
+```
+
+We applied the same approach for two contrasting ecoregion in terms of spatial distribution of historical sites.
+By using the spatially balanced design while ignoring historical sites, the selected hexagons are evenly distributed across the ecoregion, with overlapping the historical sites (@fig-sampleSize-example1).
+Adjusting the inclusion probability of hexagons given their distance to historical sites increases the spatial coverage of underrepresented areas (@fig-sampleSize-example2).
 
 ```{r runGRTS_eco101,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=8}
 #| label: fig-sampleSize-example1
-#| fig-cap: "Example of when sampling sites (red dots) using the spatially balanced design without taking historical sites into account. Ecoregion 101S and 207 are two examples of legacy sites in which the legacy sites (blue dots) are evenly and non-uniformly distributed in space, respectively."
-#| layout-ncol: 2
+#| fig-cap: "Example of when sampling sites (red dots) using the spatially balanced design without taking historical sites into account. Ecoregion 99 and 207 are two examples of legacy sites in which the legacy sites (blue dots) are evenly and non-uniformly distributed in space, respectively."
 
-set.seed(0)
+# Load selected hexagons
+sel_hex <- readRDS(file.path('data', 'selected_hexas_eco99_eco217.RDS'))
 
-Stratdsgn = c('eco_101S' = 114, 'eco_217' = 46)
-
-sampleFrame <- hexas %>%
-        mutate(    
-            eco_name = paste0('eco_', ecoregion), # to match design name
-            mdcaty  = sum(Stratdsgn) * p/sum(p),
-            geometry = sf::st_geometry(sf::st_centroid(geometry))
-        )
-
-out_sample <- grts(
-    sframe = sampleFrame,
-    n_base = Stratdsgn,
-    stratum_var = 'eco_name',
-    aux_var = 'mdcaty'
-)
-
-ggplot() +
-    geom_sf(data = st_union(subset(hexas, ecoregion == '101S'))) +
-    geom_sf(data = subset(hexas, ET_Index %in% out_sample$sites_base$ET_Index[which(out_sample$sites_base$ecoregion == '101S')]), fill = 'red', color = 'transparent') +
-    geom_sf(data = subset(hexas, ecoregion == '101S' & legacySite > 0), fill = 'blue', color = 'transparent', alpha = 0.5) +
-    ggtitle("**Ecoregion 101S**<br><span style='color:red'>Sample size</span> without adj = 114; <span style='color:blue'>Legacy sites</span> = 1033") +
+sel_hex |>
+    st_union() |>
+    ggplot() +
+    geom_sf(fill = 'lightgrey') +
+    geom_sf(data = sel_hex |> filter(nbLegacySites > 0), fill = 'blue', color = 'transparent', alpha = .55) +
+    geom_sf(data = sel_hex |> filter(selected_mdcaty == 1), fill = 'red', color = 'transparent') +
+    geom_textbox(
+        aes(x = -74.1, y = 52.2, label = "**Ecoregion 217**<br><span style='color:red'>Sample size</span>: 46<br><span style='color:blue'>Legacy sites</span>: 96"),
+        width = .22
+    ) +
+    geom_textbox(
+        aes(x = -77.5, y = 49, label = "**Ecoregion 99**<br><span style='color:red'>Sample size</span>: 71<br><span style='color:blue'>Legacy sites</span>: 579"),
+        width = .22
+    ) +
     coord_sf(crs = 4326) +
     theme_minimal() +
-    theme(
-        legend.position = 'none',
-        plot.title = element_markdown()
-    ) +
-    xlab('') + ylab('')
-
-ggplot() +
-    geom_sf(data = st_union(subset(hexas, ecoregion == '217'))) +
-    geom_sf(data = subset(hexas, ET_Index %in% out_sample$sites_base$ET_Index[which(out_sample$sites_base$ecoregion == '217')]), fill = 'red', color = 'transparent') +
-    geom_sf(data = subset(hexas, ecoregion == '217' & legacySite > 0), fill = 'blue', color = 'transparent', alpha = 0.5) +
-    ggtitle("**Ecoregion 217**<br><span style='color:red'>Sample size</span> without adj = 46; <span style='color:blue'>Legacy sites</span> = 96") +
-    coord_sf(crs = 4326) +
-    theme_minimal() +
-    theme(
-        legend.position = 'none',
-        plot.title = element_markdown()
-    ) +
+    theme(legend.position = 'none') +
     xlab('') + ylab('')
 ```
 
-Now sampling using the same design, but adjusting the inclusion probability of sites in function of the distance to historical sites:
 
 ```{r runGRTS_eco101_adj,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=8}
 #| label: fig-sampleSize-example2
-#| fig-cap: "Example of when sites are sampled from a design in which only the inclusion probability is adjusted when incorporating historical sites. Ecoregion 101S and 207 are two examples of legacy sites in which the legacy sites (blue dots) are evenly and non-uniformly distributed in space, respectively."
-#| layout-ncol: 2
+#| fig-cap: "Example of when sites are sampled from a design in which only the inclusion probability is adjusted when incorporating historical sites. Ecoregion 99 and 207 are two examples of legacy sites in which the legacy sites (blue dots) are evenly and non-uniformly distributed in space, respectively."
 
-# Coordinates of all hexagons in matrix format for MBHdesign
-coord_mt <- sampleFrame %>%
-    st_coordinates()
-
-# Coordinates of legacy hexagons
-legacySites <- sampleFrame %>%
-    filter(legacy > 0) %>%
-    st_coordinates()
-
-sampleFrame$adj_p <- MBHdesign::alterInclProbs(
-    legacy.sites = legacySites,
-    potential.sites = coord_mt,
-    inclusion.probs = sampleFrame$mdcaty,
-    sigma = 10000
-)
-
-out_sample_adjP <- spsurvey::grts(
-    sframe = sampleFrame,
-    n_base = Stratdsgn,
-    stratum_var = 'eco_name',
-    aux_var = 'adj_p'
-)
-
-ggplot() +
-    geom_sf(data = st_union(subset(hexas, ecoregion == '101S'))) +
-    geom_sf(data = subset(hexas, ET_Index %in% out_sample_adjP$sites_base$ET_Index[which(out_sample_adjP$sites_base$ecoregion == '101S')]), fill = 'red', color = 'transparent')+
-      geom_sf(data = subset(hexas, ecoregion == '101S' & legacySite > 0), fill = 'blue', color = 'transparent', alpha = 0.5) +
-    ggtitle("**Ecoregion 101S**<br><span style='color:red'>Sample size</span> without adj = 114; <span style='color:blue'>Legacy sites</span> = 1033") +
+sel_hex |>
+    st_union() |>
+    ggplot() +
+    geom_sf(fill = 'lightgrey') +
+    geom_sf(data = sel_hex |> filter(nbLegacySites > 0), fill = 'blue', color = 'transparent', alpha = .55) +
+    geom_sf(data = sel_hex |> filter(selected_adjp == 1), fill = 'red', color = 'transparent') +
+    geom_textbox(
+        aes(x = -74.1, y = 52.2, label = "**Ecoregion 217**<br><span style='color:red'>Sample size</span>: 46<br><span style='color:blue'>Legacy sites</span>: 96"),
+        width = .22
+    ) +
+    geom_textbox(
+        aes(x = -77.5, y = 49, label = "**Ecoregion 99**<br><span style='color:red'>Sample size</span>: 71<br><span style='color:blue'>Legacy sites</span>: 579"),
+        width = .22
+    ) +
     coord_sf(crs = 4326) +
     theme_minimal() +
-    theme(
-        legend.position = 'none',
-        plot.title = element_markdown()
-    ) +
-    xlab('') + ylab('')
-
-
-ggplot() +
-    geom_sf(data = st_union(subset(hexas, ecoregion == '217'))) +
-    geom_sf(data = subset(hexas, ET_Index %in% out_sample_adjP$sites_base$ET_Index[which(out_sample_adjP$sites_base$ecoregion == '217')]), fill = 'red', color = 'transparent')+
-      geom_sf(data = subset(hexas, ecoregion == '217' & legacySite > 0), fill = 'blue', color = 'transparent', alpha = 0.5) +
-    ggtitle("**Ecoregion 217**<br><span style='color:red'>Sample size</span> without adj = 46; <span style='color:blue'>Legacy sites</span> = 96") +
-    coord_sf(crs = 4326) +
-    theme_minimal() +
-    theme(
-        legend.position = 'none',
-        plot.title = element_markdown()
-    ) +
-    xlab('') + ylab('')
+    theme(legend.position = 'none')
 ```
+
+The issue is that when an ecoregion is well covered by historical sites, the sampled hexagons are forced to concentrate in smaller available areas.
+For ecoregion 99, almost a third of the sampled hexagons are concentrated in a 20 km buffer when the inclusion probability was adjusted.
+In the next section, we will build on this approach so the sample size may also be adjusted in response to historical sites.
