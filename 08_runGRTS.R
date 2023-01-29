@@ -60,12 +60,12 @@ set.seed(0.0)
     ssu_dist = 294
 
     # Name of file and columns to extract legacy
-    legacyFile = 'data/SitesLegacy_GRTS20220314.csv'
-    lat = 'Lat_DegDecValide'
-    lon = 'Long_DegDecValide'
+    legacyFile = file.path('data', 'legacySites.csv')
+    lat = 'latitude'
+    lon = 'longitude'
 
     # Output folder to save the shapefiles with PSU and SSU
-    outputFolder =  '../../ownCloud/BMS_Bruno/selection2022'
+    outputFolder =  file.path('..', '..', 'ownCloud', 'BMS_Bruno', 'selection2022')
 
 #
 
@@ -73,7 +73,7 @@ set.seed(0.0)
 
 # Prepare hexagons
 
-    hexas <- readRDS('data/hexa_complete.RDS') %>%
+    hexas <- readRDS(file.path('data', 'hexa_complete.RDS')) %>%
         filter(propNA <= prop_na) %>%
         filter(ecoregion %in% eco_sim) %>%
         mutate(
@@ -95,7 +95,7 @@ set.seed(0.0)
             st_transform(4326)
         
         # read file
-        lg <- read_csv(File) %>%
+        lg <- read_csv(File, show_col_types = FALSE) %>%
             rename(
                 lat = all_of(lat_name),
                 lon = all_of(lon_name)
@@ -118,7 +118,7 @@ set.seed(0.0)
     }
     
 
-    # load and transform legacy info
+    # load and transform legacy sites (slow function)
     legacySites <- import_legacySites(
         File = legacyFile,
         lat_name = lat,

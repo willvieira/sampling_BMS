@@ -4,6 +4,10 @@
 ### February 28, 2021
 ########################################################################
 
+########!IMPORTANT! ########
+# Update on 28 jan 2023
+# This script is no longer used as now all legacy sites are provided by the user in a single csv file on script `08_runGRTS.R`
+############################
 
 library(tidyverse)
 library(sf)
