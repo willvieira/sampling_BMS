@@ -112,9 +112,9 @@ set.seed(0.0)
 
         tibble(
             ET_Index = hx$ET_Index,
-            legacyNew = nbLegacy
+            nbLegacySites = nbLegacy
         ) %>%
-        filter(legacyNew > 0)
+        filter(nbLegacySites > 0)
     }
     
 
@@ -127,11 +127,7 @@ set.seed(0.0)
 
     # merge to hexagons
     hexas <- hexas %>%
-        left_join(legacySites) %>%
-        mutate(
-            legacyNew = replace_na(legacyNew, 0),
-            legacy = legacySite + legacyNew
-        )
+        left_join(legacySites)
 
 #
 
@@ -146,7 +142,7 @@ set.seed(0.0)
             st_centroid()
 
         hexa_legacy_bf <- hexa_eco %>%
-            filter(legacy > 0) %>%
+            filter(nbLegacySites > 0) %>%
             st_buffer(bf_N * 1000) %>%
             st_union()
 
@@ -194,7 +190,7 @@ set.seed(0.0)
 
     # Coordinates of legacy hexagons
     legacySites <- sampleFrame %>%
-        filter(legacy > 0) %>%
+        filter(nbLegacySites > 0) %>%
         st_coordinates()
 
     sampleFrame$adj_p <- MBHdesign::alterInclProbs(
@@ -678,7 +674,7 @@ set.seed(0.0)
         ###########################################
         dir.create(file.path(eco_path, 'PSU_hexagons'))
 
-        varsToRm = c('OBJECTID', 'Join_Count', 'TARGET_FID', 'ET_ID', 'ET_ID_Old', 'ET_IDX_Old', 'legacySite', 'legacyNew')
+        varsToRm = c('OBJECTID', 'Join_Count', 'TARGET_FID', 'ET_ID', 'ET_ID_Old', 'ET_IDX_Old')
 
         hexas_eco <- hexas %>%
             filter(ecoregion == eco) %>%
