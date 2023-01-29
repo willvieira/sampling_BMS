@@ -127,7 +127,8 @@ set.seed(0.0)
 
     # merge to hexagons
     hexas <- hexas %>%
-        left_join(legacySites)
+        left_join(legacySites) %>%
+        mutate(nbLegacySites = replace_na(nbLegacySites, 0))
 
 #
 
