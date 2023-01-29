@@ -55,7 +55,7 @@ Here, we discuss why changing inclusion probability alone is insufficient by com
 While the ecoregion 99 has evenly distributed historical sites over space, the ecoregion 217 present most of its historical sites around roads.
 We begin by outlining the method for reducing the inclusion probability of sites near legacy sites from @Foster2021, which we then apply to the two contrasting ecoregions.
 
-Every PSU hexagon is assigend an inclusion probability as a function of habitat and access cost.
+Every PSU hexagon is assigned an inclusion probability as a function of habitat and access cost.
 The effect of a legacy site ($l$) on the inclusion probability of neighbouring hexagons ($h$) is derived from the Euclidean distance between $h$ and $l$ ($d(h, l)$), and the amplitude effect $\sigma$ using a Gaussian function.
 @fig-foster-gaussian shows the one-dimensional effect of increasing values of $\sigma$ on the inclusion probability of neighbouring sites.
 
@@ -78,7 +78,7 @@ tibble(Dist = seq(1, 40000, 100)) |>
         scale_colour_viridis_d(guide = guide_legend(title = expression("" ~ sigma ~ "")))
 ```
 
-The method to reduce the inclusion probability of neighbouring sites near legacy sites developed in @Foster2021 is implimented in the R package `MBHdesign`.
+The method to reduce the inclusion probability of neighbouring sites near legacy sites developed in @Foster2021 is implemented  in the R package `MBHdesign`.
 We redrew their illustration using a simulated grid landscape with three legacy sites to ilustrate the effect of increasing the $\sigma$ parameter on the inclusion probability of adjacent sites (@fig-foster-landscape).
 
 ```{r legacyExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=8}
@@ -120,9 +120,9 @@ for(i in 1:length(incl_ls)) {
 }
 ```
 
-We applied the same approach for two contrasting ecoregion in terms of spatial distribution of historical sites.
-By using the spatially balanced design while ignoring historical sites, the selected hexagons are evenly distributed across the ecoregion, with overlapping the historical sites (@fig-sampleSize-example1).
-Adjusting the inclusion probability of hexagons given their distance to historical sites increases the spatial coverage of underrepresented areas (@fig-sampleSize-example2).
+We applied the same approach for two ecoregion with contrasting spatial distribution of historical sites.
+By using the spatially balanced design while omitting historical sites, the selected hexagons are evenly distributed throughout the ecoregion, some of which overlap with the historic sites (@fig-sampleSize-example1).
+Adjusting the probability of inclusion of hexagons, given their distance to historical locations, increases the spatial coverage of underrepresented areas (@fig-sampleSize-example2).
 
 ```{r runGRTS_eco101,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=8}
 #| label: fig-sampleSize-example1
@@ -175,6 +175,6 @@ sel_hex |>
     theme(legend.position = 'none')
 ```
 
-The issue is that when an ecoregion is well covered by historical sites, the sampled hexagons are forced to concentrate in smaller available areas.
-For ecoregion 99, almost a third of the sampled hexagons are concentrated in a 20 km buffer when the inclusion probability was adjusted.
+The issue is that when an ecoregion is well covered by historical sites, the sampled hexagons are driven to cluster in smaller available areas.
+When the inclusion probability was adjusted for ecoregion 99, almost a third of the sampled hexagons were clustered in a 20 km buffer.
 In the next section, we will build on this approach so the sample size may also be adjusted in response to historical sites.
