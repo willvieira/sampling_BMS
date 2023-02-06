@@ -2,7 +2,7 @@
 ### Title: Run GRTS
 ### Author: Will Vieira
 ### December 9, 2020
-### Last edited: June 22, 2022
+### Last edited: Feb 5, 2023
 ########################################################################
 
 library(raster)
@@ -65,7 +65,11 @@ set.seed(0.0)
     lon = 'longitude'
 
     # Output folder to save the shapefiles with PSU and SSU
-    outputFolder =  file.path('..', '..', 'ownCloud', 'BMS_Bruno', 'selection2022')
+    outputFolder = file.path('..', '..', 'ownCloud', 'BMS_Bruno', 'selection2023')
+
+    # suffix to add for each output layer
+    # e.g.: PSU-SOQB_ALL-SUFFIX.shp
+    fileSuffix = 'V2023'
 
 #
 
@@ -116,7 +120,7 @@ set.seed(0.0)
         ) %>%
         filter(nbLegacySites > 0)
     }
-    
+
 
     # load and transform legacy sites (slow function)
     legacySites <- import_legacySites(
@@ -273,16 +277,16 @@ set.seed(0.0)
         # if a selected hexagon has no neighbour, select a random from the ecoregion
         toCheck <- unlist(lapply(best_p, length))
         if(any(toCheck == 0)) {
-            # which hexagons where not selected? 
+            # which hexagons were not selected? 
             nonSelected_hexas <- setdiff(hexas_eco$ET_Index, hexas_sel_eco$ET_Index)
             
-            # sample and add as extra
-            best_p[which(toCheck == 0)] <- sample(nonSelected_hexas, sum(toAdd == 0))
+            # sample from non selected hexas
+            best_p[which(toCheck == 0)] <- sample(nonSelected_hexas, sum(toCheck == 0))
         }
         
         selected_extra <- rbind(
             selected_extra,
-            hexas_eco[match(best_p, hexas$ET_Index), ]
+            hexas_eco[match(best_p, hexas_eco$ET_Index), ]
         )
     }
 
@@ -295,7 +299,7 @@ set.seed(0.0)
     # Calculate probability following habitat proportion from ecoregion
     ########################
 
-    land_ca <- raster("data/landcover_ca_30m.tif")
+    land_ca <- raster('data/landcover_ca_30m.tif')
     prev_all <- readRDS('data/prev_all.RDS')
 
     # function to generate SSU points (from: https://github.com/dhope/BASSr)
@@ -673,13 +677,15 @@ set.seed(0.0)
 
         # PSU
         ###########################################
-        dir.create(file.path(eco_path, 'PSU_hexagons'))
 
         varsToRm = c('OBJECTID', 'Join_Count', 'TARGET_FID', 'ET_ID', 'ET_ID_Old', 'ET_IDX_Old')
 
         hexas_eco <- hexas %>%
             filter(ecoregion == eco) %>%
-            select(-varsToRm)
+            select(-all_of(varsToRm))
+
+        # rename attributes table so it has a maximum of 10 characters
+        names(hexas_eco) <- abbreviate(names(hexas_eco), minlength = 10)
 
         coords <- hexas_eco %>%
             sf::st_centroid() %>%
@@ -693,7 +699,12 @@ set.seed(0.0)
                 latitude = coords$Y,
                 longitude = coords$X
             ) %>%
-            write_sf(file.path(eco_path, 'PSU_hexagons', 'all_hexagons.shp'))
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('PSU-SOBQ_ALL-', fileSuffix, '.shp')
+                )
+            )
 
         # main hexagons
         hexas_eco %>%
@@ -702,7 +713,12 @@ set.seed(0.0)
                 longitude = coords$X
             ) %>%
             filter(ET_Index %in% subset(selected_hexas, ecoregion == eco)$ET_Index) %>%
-            write_sf(file.path(eco_path, 'PSU_hexagons', 'main_hexagons.shp'))
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('PSU-SOBQ_Main-', fileSuffix, '.shp')
+                )
+            )
 
         # over hexagons
         hexas_eco %>%
@@ -711,12 +727,16 @@ set.seed(0.0)
                 longitude = coords$X
             ) %>%
             filter(ET_Index %in% subset(selected_extra, ecoregion == eco)$ET_Index) %>%
-            write_sf(file.path(eco_path, 'PSU_hexagons', 'over_hexagons.shp'))
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('PSU-SOBQ_Over-', fileSuffix, '.shp')
+                )
+            )
 
         
         # SSU
         ###########################################
-        dir.create(file.path(eco_path, 'SSU_points'))
 
         # SSU main
         SSU_eco <- SSU_selected %>%
@@ -733,7 +753,12 @@ set.seed(0.0)
                 latitude = coords$Y,
                 longitude = coords$X
             ) %>%
-            write_sf(file.path(eco_path, 'SSU_points', 'all_main.shp'))
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('SSU-SOBQ_ALL_main-', fileSuffix, '.shp')
+                )
+            )
 
         # SSU over
         SSU_eco_extra <- SSU_selected_extra %>%
@@ -750,7 +775,12 @@ set.seed(0.0)
                 latitude = coords$Y,
                 longitude = coords$X
             ) %>%
-            write_sf(file.path(eco_path, 'SSU_points', 'all_over.shp'))
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('SSU-SOBQ_ALL_over-', fileSuffix, '.shp')
+                )
+            )
 
         # SSU selected main
         SSUmain_eco <- SSUmain %>%
@@ -770,7 +800,12 @@ set.seed(0.0)
                 latitude = coords$Y,
                 longitude = coords$X
             ) %>%
-            write_sf(file.path(eco_path, 'SSU_points', 'selected_main.shp'))
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('SSU-SOBQ_selected_main-', fileSuffix, '.shp')
+                )
+            )
         
         # SSU selected over
         SSUover_eco <- SSUover %>%
@@ -790,6 +825,10 @@ set.seed(0.0)
                 latitude = coords$Y,
                 longitude = coords$X
             ) %>%
-            write_sf(file.path(eco_path, 'SSU_points', 'selected_over.shp'))
-
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('SSU-SOBQ_selected_over-', fileSuffix, '.shp')
+                )
+            )
     }
