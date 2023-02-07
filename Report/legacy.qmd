@@ -2,6 +2,7 @@
 
 In this section we discuss our approach to account for legacy and iconic sites in the sampling design.
 Legacy sites are historical or current surveys in which locations were randomly chosen, in contrast to iconic sites, which are obtained from non-random surveys.
+In this report, we will refer to both iconic and legacy sites as historic sites.
 These sites are particularly important in Quebec, where there are a large number of legacy and iconic sites (@fig-legacy-sites).
 Given the high cost of sampling in remote regions and the limited resources available to sample, it is essential to take historical sites into account in order to make the most efficient use of limited resources to extend spatial coverage to under-sampled areas.
 
@@ -107,7 +108,7 @@ inclProbs <- n * inclProbs / sum( inclProbs)
 # adj according to different values of sigma
 sigmas <- c(2000, 10000, 40000)
 
-incl_ls <- readRDS(file.path('data', 'inclPorb_figFoster.RDS'))
+incl_ls <- readRDS(file.path('data', 'inclProb_figFoster.RDS'))
 
 par(mfrow = c(2, 2), mar = c(0.5, 0.5, 1.5, 0.5), oma = c(1.5, 1.5, .5, 0), mgp = c(1.2, 0.2, 0), tck = -.008, cex = 0.8)
 for(i in 1:length(incl_ls)) {
