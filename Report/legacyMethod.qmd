@@ -20,6 +20,7 @@ suppressPackageStartupMessages(library(MBHdesign))
 suppressPackageStartupMessages(library(ggtext))
 suppressPackageStartupMessages(library(ggdist))
 suppressPackageStartupMessages(library(ggridges))
+suppressPackageStartupMessages(library(ggpubr))
 ```
 
 ```{r adj_sampleSize,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
@@ -64,14 +65,13 @@ This approach hopes to solve the two issues that emerged when only inclusion pro
 First, it offers the opportunity to use both legacy and iconic sites, regardless of the randomness of their distribution.
 Finally, it enables us to accommodate the number and distribution of historical sites in order to adjust the sample size and avoid clustered samples in ecoregions with adequate coverage.
 
-::: {#fig-adj-sampleSize2}
-
-```{r adj_sampleSize2,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
-#| layout-nrow: 1
+```{r adj_sampleSize2,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=4}
+#| label: fig-adj-sampleSize2
+#| fig-cap: "Grid of sample units and historical sites (red dots) for a simulated region. Using the same approach for adjusting the inclusion probability, a buffer around each historical site is created to calculate the adjusted sampled size."
 
 buffSize <- .33
 
-ggplot(fake_hex) +
+p1 <- ggplot(fake_hex) +
     geom_sf(fill = 'white', color = 'grey') +
     geom_sf(data = fake_hex[balanced_ls], fill = '#D41159', color = 'grey') +
     geom_sf(data = st_union(st_buffer(fake_hex[balanced_ls], dist = buffSize)), fill = '#D41159', color = 'transparent', alpha = .4) +
@@ -85,7 +85,7 @@ ggplot(fake_hex) +
     )
     
 
-ggplot(fake_hex) +
+p2 <- ggplot(fake_hex) +
     geom_sf(fill = 'white', color = 'grey') +
     geom_sf(data = fake_hex[unbalanced_ls], fill = '#1A85FF', color = 'grey') +
     geom_sf(data = st_union(st_buffer(fake_hex[unbalanced_ls], dist = buffSize)), fill = '#1A85FF', color = 'transparent', alpha = .4) +
@@ -97,11 +97,9 @@ ggplot(fake_hex) +
         axis.text.y=element_blank(),
         axis.ticks.y=element_blank() 
     )
+
+ggarrange(p1, p2, ncol = 2)
 ```
-
-Grid of sample units and historical sites (red dots) for a simulated region. Using the same approach for adjusting the inclusion probability, a buffer around each historical site is created to calculate the adjusted sampled size.
-
-:::
 
 The unsolved issue is how to define the optimal value for the coverage of a historical site ($s$).
 In a perfect spatial balanced distribution of historical sites, the adjusted sample size of an ecoreregion should be reduced by the total number of historical sites.
@@ -239,9 +237,9 @@ nbHexas_buffer |>
         geom_hline(aes(yintercept = nrow(hexas_sim) * sample_effort), linetype = 'dashed', alpha = .7) +
         geom_hline(aes(yintercept = nrow(hexas_sim) * sample_effort - 20), linetype = 'dashed', alpha = .7) +
         geom_vline(aes(xintercept = opt_bufferSize), linetype = 'dashed', alpha = .7) +
-        geom_text(aes(x = 20.5, y = nrow(hexas_sim) * sample_effort -20 + 3, label = as.character(as.expression(eq1))), parse = TRUE, hjust = 0) +
-        geom_text(aes(x = 20.5, y = nrow(hexas_sim) * sample_effort + 3, label = as.character(as.expression(eq2))), parse = TRUE, hjust = 0) +
-        geom_text(aes(x = opt_bufferSize - 1.5, y = 50.5, label = 'Optimum buffer size'), hjust = 0, angle = 90) +
+        geom_text(aes(x = 20.5, y = nrow(hexas_sim) * sample_effort -20 + 5, label = as.character(as.expression(eq1))), parse = TRUE, hjust = 0, check_overlap = TRUE) +
+        geom_text(aes(x = 20.5, y = nrow(hexas_sim) * sample_effort + 5, label = as.character(as.expression(eq2))), parse = TRUE, hjust = 0, check_overlap = TRUE) +
+        geom_text(aes(x = opt_bufferSize - 1.5, y = 50.5, label = 'Optimum buffer size'), hjust = 0, angle = 90, check_overlap = TRUE) +
         theme_minimal() +
         theme(legend.position = 'none') +
         xlab('Buffer size (Km)') +
@@ -525,7 +523,7 @@ Ecoregions 131, 28, 30, 46, 48, 49, and 216 were excluded due to the very small 
 The effect of buffer size and the proportion of historical sites on the adjusted sample size using the ecoregion boundaries were similar to those performed using a simulated grid (@fig-bufferSize_vs_Nadj).
 The effect of increasing the buffer size on the reduction of the adjusted sample size is non-linear, with the rate of change increasing as the number of historical sites rises.
 
-```{r figBufferVsNadjForEcoregion,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
+```{r figBufferVsNadjForEcoregion,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=7}
 #| label: fig-bufferSize_vs_Nadj
 #| fig-cap: "Adjusted sample size in function of buffer size for different proportion of historical sites compared to initial sample size. When buffer size and proportion of historical sites equals zero, adjusted sample size is equal to the initial sample size."
 
@@ -554,7 +552,7 @@ This non-linear relationship can be observed in the effect of the number of hist
 The optimal buffer size increases with the number of historical sites up to a point where it decreases for most ecoregions as the proportion of historical sites increases.
 Only the ecoregion 131 show a slight decrease in optimal buffer size with the number of historical sites.
 
-```{r figPropvsNadj_ecoregion,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
+```{r figPropvsNadj_ecoregion,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=7}
 #| label: fig-propVsNadj_eco
 #| fig-cap: "Optimal buffer size in function of the proportion of historical sites to the initial sample size. Each dot is a replication of the simulated increase of proportion of historical sites. Blue line is smooth estimation using Generalized additive model to demonstrate the exponential effect of the proportion of historical sites on the optimal buffer size."
 
@@ -587,7 +585,7 @@ eco_nbHexas |>
 
 Across the simulations and replications, the distribution of optimal buffer size follows a bimodal distribution.(@fig-optbuffersize).
 
-```{r figOptBufferSizevsEco,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
+```{r figOptBufferSizevsEco,echo=FALSE,message=FALSE,warning=FALSE,fig.width=6,fig.height=7}
 #| label: fig-optbuffersize
 #| fig-cap: "Distribution of optimal buffer size across all simulation variables and 15 replications for each ecoregion."
 
@@ -731,12 +729,12 @@ As a result, the adjusted sample size for these two ecoregions should also be di
 The optimal buffer size in fuction of the proportion of historical sites for the ecoregions 99 and 217 was `r subset(best_buffer, ecoregion == 99)$opt_bsMean/1000` and `r subset(best_buffer, ecoregion == 217)$opt_bsMean/1000` Km, respectively.
 The adjusted sample size taking into account the distribution and number of historical sites was reduced from `r round(subset(nbLegacy_eco, ecoregion == 99)$nSample, 0)` to `r round(subset(nbLegacy_eco, ecoregion == 99)$N_adj, 0)` for ecoregion 99, and from `r round(subset(nbLegacy_eco, ecoregion == 217)$nSample, 0)` to `r round(subset(nbLegacy_eco, ecoregion == 217)$N_adj, 0)` for ecoregion 217 (@fig-ecosExample).
 
-::: {#fig-ecosExample}
 
-```{r figEcosExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
-#| layout-nrow: 1
+```{r figEcosExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=5}
+#| label: fig-ecosExample
+#| fig-cap: "Distribution of historical sites and their coverage according to the optimal buffer size specific for the ecoregion."
 
-hx_99 |>
+p1 <- hx_99 |>
     st_union() |>
     ggplot() +
         geom_sf() +
@@ -760,7 +758,7 @@ hx_99 |>
         ggtitle(label = "Ecoregion 99<br><span style='color:#e93a2a'>Historical sites</span>: 579") +
         theme(plot.title = element_markdown())
 
-hx_217 |>
+p2 <- hx_217 |>
     st_union() |>
     ggplot() +
         geom_sf() +
@@ -783,11 +781,10 @@ hx_217 |>
         coord_sf(crs = 4326) +
         ggtitle(label = "Ecoregion 217<br><span style='color:#e93a2a'>Historical sites</span>: 97") +
         theme(plot.title = element_markdown())
+
+ggarrange(p1, p2, ncol = 2)
 ```
 
-Distribution of historical sites and their coverage according to the optimal buffer size specific for the ecoregion. 
-
-:::
 
 ## Limitations
 

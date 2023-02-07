@@ -88,7 +88,7 @@ Following the equation above, the inclusion probability of these two habitats ar
 This means that although habitat `r prev_eco_ext |> filter(Max == TRUE) |> pull(code)` is `r prev_eco_ext |> summarise(r = round(freq[Max == TRUE]/freq[Max == FALSE],0)) |> pull(r)` times more frequent than habitat `r prev_eco_ext |> filter(Max == FALSE) |> pull(code)`, they are equally likely to be sampled.
 For a visual example, we show the relative proportion of habitat from a sample of 10 hexagons with and without inclusion probability @fig-sample-habitat.
 
-```{r sampleHabitat,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+```{r sampleHabitat,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=7}
 #| label: fig-sample-habitat
 #| fig-cap: "Example of sampling 10 (2%) hexagons in ecoregion 102 with (left bar) and without (right) eeighted probability accounting for habitat heterogenity. Eeach bar represents the relative proportion of habitat classes from the 10 selected hexagons."
 

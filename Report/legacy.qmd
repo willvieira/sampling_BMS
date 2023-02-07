@@ -20,7 +20,7 @@ Finally, we briefly describe previous experimentations to incorporate historical
 
 ## Historical sites in Quebec
 
-```{r legacyFigure,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+```{r legacyFigure,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
 #| label: fig-legacy-sites
 #| fig-cap: "Legacy and historical sites from the study area."
 
@@ -60,7 +60,7 @@ Every PSU hexagon is assigned an inclusion probability as a function of habitat 
 The effect of a legacy site ($l$) on the inclusion probability of neighbouring hexagons ($h$) is derived from the Euclidean distance between $h$ and $l$ ($d(h, l)$), and the amplitude effect $\sigma$ using a Gaussian function.
 @fig-foster-gaussian shows the one-dimensional effect of increasing values of $\sigma$ on the inclusion probability of neighbouring sites.
 
-```{r fosterGaussian,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=6}
+```{r fosterGaussian,echo=FALSE,message=FALSE,warning=FALSE,fig.width=6,fig.height=5}
 #| label: fig-foster-gaussian
 #| fig-cap: "Legacy effect in the inclusion probabiity of neighbouring sites in function their Euclian distance. Each line represents the effect range of legacy sites."
 
@@ -82,7 +82,7 @@ tibble(Dist = seq(1, 40000, 100)) |>
 The method to reduce the inclusion probability of neighbouring sites near legacy sites developed in @Foster2021 is implemented  in the R package `MBHdesign`.
 We redrew their illustration using a simulated grid landscape with three legacy sites to ilustrate the effect of increasing the $\sigma$ parameter on the inclusion probability of adjacent sites (@fig-foster-landscape).
 
-```{r legacyExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=8}
+```{r legacyExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=6}
 #| label: fig-foster-landscape
 #| fig-cap: "Legacy effect in the inclusion probabiity of neighbouring sites in function their Euclian distance. Each line represents the effect range of legacy sites."
 
@@ -125,7 +125,7 @@ We applied the same approach for two ecoregion with contrasting spatial distribu
 By using the spatially balanced design while omitting historical sites, the selected hexagons are evenly distributed throughout the ecoregion, some of which overlap with the historic sites (@fig-sampleSize-example1).
 Adjusting the probability of inclusion of hexagons, given their distance to historical locations, increases the spatial coverage of underrepresented areas (@fig-sampleSize-example2).
 
-```{r runGRTS_eco101,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=8}
+```{r runGRTS_eco101,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
 #| label: fig-sampleSize-example1
 #| fig-cap: "Example of when sampling sites (red dots) using the spatially balanced design without taking historical sites into account. Ecoregion 99 and 207 are two examples of legacy sites in which the legacy sites (blue dots) are evenly and non-uniformly distributed in space, respectively."
 
@@ -153,7 +153,7 @@ sel_hex |>
 ```
 
 
-```{r runGRTS_eco101_adj,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=8}
+```{r runGRTS_eco101_adj,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
 #| label: fig-sampleSize-example2
 #| fig-cap: "Example of when sites are sampled from a design in which only the inclusion probability is adjusted when incorporating historical sites. Ecoregion 99 and 207 are two examples of legacy sites in which the legacy sites (blue dots) are evenly and non-uniformly distributed in space, respectively."
 
@@ -173,7 +173,8 @@ sel_hex |>
     ) +
     coord_sf(crs = 4326) +
     theme_minimal() +
-    theme(legend.position = 'none')
+    theme(legend.position = 'none') +
+    xlab('') + ylab('')
 ```
 
 The issue is that when an ecoregion is well covered by historical sites, the sampled hexagons are driven to cluster in smaller available areas.
