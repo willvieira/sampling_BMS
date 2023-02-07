@@ -45,8 +45,12 @@ vignettes/*.pdf
 # raw data
 archives/*
 rawLayers/*
-data/*
 output/*
 docs/*
 maps/*
 sim_weight/*
+
+# large data
+data/landcover_caqc_30m.tif
+data/landcover_ca_30m.tif
+data/min_cost.tif
