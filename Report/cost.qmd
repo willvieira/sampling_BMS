@@ -25,17 +25,16 @@ We then rasterize the road and trail buffer polygons to a 30-meter resolution ra
 #| label: fig-transport-layers
 #| fig-cap: "Transport layers used to calculate the access cost across the study area. Yellow for roads, green for trails, blue dots for airports, and purple for trains."
 
-
 suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(sf))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(kableExtra))
 
-area = readRDS(file.path('data', 'area.RDS'))
-roads = readRDS(file.path('data', 'roads_buffer.RDS'))
-trails = readRDS(file.path('data', 'trails_buffer.RDS'))
-airport = readRDS(file.path('data', 'aeroports.RDS'))
-train = readRDS(file.path('data', 'train.RDS'))
+area = readRDS(file.path('..', 'data', 'area.RDS'))
+roads = readRDS(file.path('..', 'data', 'roads_buffer.RDS'))
+trails = readRDS(file.path('..', 'data', 'trails_buffer.RDS'))
+airport = readRDS(file.path('..', 'data', 'aeroports.RDS'))
+train = readRDS(file.path('..', 'data', 'train.RDS'))
 
 area |>
     ggplot() +

@@ -7,14 +7,14 @@ suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(kableExtra))
 suppressPackageStartupMessages(library(ggspatial))
 
-area = readRDS(file.path('data', 'area.RDS'))
+area = readRDS(file.path('..', 'data', 'area.RDS'))
 ecoz = read_sf(file.path('data', 'Ecozones', 'ecozones.shp')) |>
     st_transform(st_crs(area)) |>
     st_intersection(area) |>
     mutate(Ecozone = ZONE_NAME) |>
     select(Ecozone)
-prov = readRDS(file.path('data', 'province.RDS'))
-ecor = readRDS(file.path('data', 'districts.RDS'))
+prov = readRDS(file.path('..', 'data', 'province.RDS'))
+ecor = readRDS(file.path('..', 'data', 'districts.RDS'))
 ```
 
 ## Area of study

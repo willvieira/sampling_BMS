@@ -13,11 +13,12 @@ Following the BOSS design, for both Land cover layers the Snow and ice, water, U
 ```{r ecoLand,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
 #| label: fig-ecoregion-hab
 #| fig-cap: "Ecoregions using Land cover Canada (red) or Land cover Quebec (blue)."
+
 suppressPackageStartupMessages(library(sf))
 suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(ggplot2))
 
-ecor = readRDS(file.path('data', 'districts.RDS'))
+ecor = readRDS(file.path('..', 'data', 'districts.RDS'))
 
 eco_land_ca <- c(28, 30, 46, 48, 49, 78, 86, 216)
 ecor |>
@@ -64,7 +65,7 @@ Take, for instance, the frequency of pixels per habitat type for the ecoregion 1
 
 ```{r, echo=FALSE}
 suppressPackageStartupMessages(library(tidyverse))
-prev_all <- readRDS(file.path('data', 'prev_all.RDS'))
+prev_all <- readRDS(file.path('..', 'data', 'prev_all.RDS'))
 prev_all |>
     filter(ID_ecoregion == 102) |>
     mutate(
