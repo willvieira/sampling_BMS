@@ -13,7 +13,7 @@ ecoz = read_sf(file.path('data', 'Ecozones', 'ecozones.shp')) |>
     st_intersection(area) |>
     mutate(Ecozone = ZONE_NAME) |>
     select(Ecozone)
-prov = readRDS(file.path('..', 'data', 'province.RDS'))
+prov = readRDS(file.path('data', 'province.RDS'))
 ecor = readRDS(file.path('..', 'data', 'districts.RDS'))
 ```
 
