@@ -702,7 +702,7 @@ set.seed(0.0)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('PSU-SOBQ_ALL-', fileSuffix, '.shp')
+                    paste0('PSU-SOBQ_eco', eco, '_ALL-', fileSuffix, '.shp')
                 )
             )
 
@@ -716,7 +716,7 @@ set.seed(0.0)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('PSU-SOBQ_Main-', fileSuffix, '.shp')
+                    paste0('PSU-SOBQ_eco', eco, '_Main-', fileSuffix, '.shp')
                 )
             )
 
@@ -730,7 +730,7 @@ set.seed(0.0)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('PSU-SOBQ_Over-', fileSuffix, '.shp')
+                    paste0('PSU-SOBQ_eco', eco, '_Over-', fileSuffix, '.shp')
                 )
             )
 
@@ -756,7 +756,7 @@ set.seed(0.0)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('SSU-SOBQ_ALL_main-', fileSuffix, '.shp')
+                    paste0('SSU-SOBQ_eco', eco, '_ALL_main-', fileSuffix, '.shp')
                 )
             )
 
@@ -778,7 +778,7 @@ set.seed(0.0)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('SSU-SOBQ_ALL_over-', fileSuffix, '.shp')
+                    paste0('SSU-SOBQ_eco', eco, '_ALL_over-', fileSuffix, '.shp')
                 )
             )
 
@@ -803,7 +803,7 @@ set.seed(0.0)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('SSU-SOBQ_selected_main-', fileSuffix, '.shp')
+                    paste0('SSU-SOBQ_eco', eco, '_selected_main-', fileSuffix, '.shp')
                 )
             )
         
@@ -828,7 +828,7 @@ set.seed(0.0)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('SSU-SOBQ_selected_over-', fileSuffix, '.shp')
+                    paste0('SSU-SOBQ_eco', eco, '_selected_over-', fileSuffix, '.shp')
                 )
             )
     }
