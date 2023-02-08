@@ -624,7 +624,7 @@ eco_nbHexas |>
 ## The case of ecoregions 99 and 217
 
 ```{r calculateNblegacy_ecoregion,echo=FALSE,amessage=FALSE,warning=FALSE}
-legacy_points <- read_csv(file.path('data', 'legacySites.csv'), show_col_types = FALSE) |>
+legacy_points <- read_csv(file.path('..', 'data', 'legacySites.csv'), show_col_types = FALSE) |>
     st_as_sf(
         coords = c('longitude', 'latitude'),
         crs = st_crs(4326)
