@@ -623,8 +623,8 @@ eco_nbHexas |>
 
 ## The case of ecoregions 99 and 217
 
-```{r calculateNblegacy_ecoregion,echo=FALSE,message=FALSE,warning=FALSE}
-legacy_points <- read_csv(file.path('..', 'data', 'legacySites.csv'), show_col_types = FALSE) |>
+```{r calculateNblegacy_ecoregion,echo=FALSE,eval=FALSE,amessage=FALSE,warning=FALSE}
+legacy_points <- read_csv(file.path('data', 'legacySites.csv'), show_col_types = FALSE) |>
     st_as_sf(
         coords = c('longitude', 'latitude'),
         crs = st_crs(4326)
@@ -633,9 +633,11 @@ legacy_points <- read_csv(file.path('..', 'data', 'legacySites.csv'), show_col_t
 
 nbLegacy_hex = hexas |>
     st_drop_geometry() |>
+    filter(ecoregion %in% c(99, 217)) |>
     select(ecoregion, ET_Index) |>
     bind_cols(
         nbLegacy = hexas |>
+            filter(ecoregion %in% c(99, 217)) |>
             st_contains(legacy_points, sparse = FALSE) |>
             apply(1, sum)
     )
