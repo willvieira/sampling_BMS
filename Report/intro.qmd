@@ -27,5 +27,5 @@ We then detail de habitat and cost layers to weight the inclusion probabilities.
 Finally, we dedicate a complete section to describe the simulations used to create the new method to account for legacy and iconic sites.
 The first section contains most of the steps that have been regionalized for Quebec.
 The second section details the sample steps using the GRTS algorithm.
-We first show the method to calculate the stratified sample size for each ecoregion.
+In this second part, we will begin by describing the method used to calculate the stratified sample size for each of the ecoregions.
 We then detail the use of the GRTS to sample the PSUs and the Secondary Sample Unit (SSU).

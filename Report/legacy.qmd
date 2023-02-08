@@ -2,7 +2,7 @@
 
 In this section we discuss our approach to account for legacy and iconic sites in the sampling design.
 Legacy sites are historical or current surveys in which locations were randomly chosen, in contrast to iconic sites, which are obtained from non-random surveys.
-In this report, we will refer to both iconic and legacy sites as historic sites.
+In this report, we will refer to both iconic and legacy sites as historical sites.
 These sites are particularly important in Quebec, where there are a large number of legacy and iconic sites (@fig-legacy-sites).
 Given the high cost of sampling in remote regions and the limited resources available to sample, it is essential to take historical sites into account in order to make the most efficient use of limited resources to extend spatial coverage to under-sampled areas.
 
@@ -11,14 +11,16 @@ They use the position of each historical site to reduce the inclusion probabilit
 However, their approach to incorporate legacy and iconic sites do not explicitly consider the amount of historical sites, nor the spatial randomness of their distribution.
 In fact, their approach naturally ensures randomnly selected sites, as they use only legacy sites while excluding iconic ones.
 They justify the exclusion of iconic sites, since these sites are usually special cases that may not represent the population and therefore generate a biased sample.
-Although we agree with the authors, we prioritised expanding the spatial coverage of samples by reducing the sample size of regions that have been well covered by legacy and iconic sites.
+Although we agree with the authors, we prioritised expanding the spatial coverage of samples by reducing the sample size of regions that have been well covered by historical sites.
 
 In the following section we describe the historical sites for the study area.
 Then, we use two ecoregions as examples to discuss the decision to also consider sample size while accounting for historical sites.
 In the next chapter we describe our novel approach to account for the spatial randomness of historical sites to adjust the inclusion probability and the sample size.
 Finally, we briefly describe previous experimentations to incorporate historical sites.
 
-## Historical sites in Quebec
+## Historical sites in the study area
+
+*TODO: describe the different sources*
 
 ```{r legacyFigure,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
 #| label: fig-legacy-sites
@@ -84,7 +86,7 @@ We redrew their illustration using a simulated grid landscape with three legacy 
 
 ```{r legacyExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=6}
 #| label: fig-foster-landscape
-#| fig-cap: "Legacy effect in the inclusion probabiity of neighbouring sites in function their Euclian distance. Each line represents the effect range of legacy sites."
+#| fig-cap: "Effect of increasing the effect (sigma) of three legacy sites (white dots) on the inclusion probability of neighbouring sites. Each square is a simulated sampling grid with different inclusion probability described by the color gradient. Inclusion probability increases from dark blue (low) to yellow (high)."
 
 #number of samples
 n <- 10
@@ -122,7 +124,7 @@ for(i in 1:length(incl_ls)) {
 ```
 
 We applied the same approach for two ecoregion with contrasting spatial distribution of historical sites.
-By using the spatially balanced design while omitting historical sites, the selected hexagons are evenly distributed throughout the ecoregion, some of which overlap with the historic sites (@fig-sampleSize-example1).
+By using the spatially balanced design to sample new sites while omitting historical sites, the selected hexagons are evenly distributed throughout the ecoregion, some of which overlap with the historical sites (@fig-sampleSize-example1).
 Adjusting the probability of inclusion of hexagons, given their distance to historical locations, increases the spatial coverage of underrepresented areas (@fig-sampleSize-example2).
 
 ```{r runGRTS_eco101,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}

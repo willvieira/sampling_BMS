@@ -90,7 +90,7 @@ For a visual example, we show the relative proportion of habitat from a sample o
 
 ```{r sampleHabitat,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=7}
 #| label: fig-sample-habitat
-#| fig-cap: "Example of sampling 10 (2%) hexagons in ecoregion 102 with (left bar) and without (right) eeighted probability accounting for habitat heterogenity. Eeach bar represents the relative proportion of habitat classes from the 10 selected hexagons."
+#| fig-cap: "Example of sampling 10 (2%) hexagons in ecoregion 102 with (left bar) and without (right) weighted probability accounting for habitat heterogenity. Eeach bar represents the relative proportion of habitat classes from the 10 selected hexagons."
 
 habitat_colors <- c(land_1 = rgb(0, 61, 0, maxColorValue = 255),
                     land_2 = rgb(148, 156, 112, maxColorValue = 255),
@@ -132,7 +132,7 @@ hex102 |>
             ifelse(
                 ET_Index %in% sample_random,
                 'Random sample',
-                ifelse(ET_Index %in% sample_prob, 'Weighted sampled', 'WRONG!')
+                ifelse(ET_Index %in% sample_prob, 'Weighted sample', 'WRONG!')
             )
         )
     ) |>

@@ -1,7 +1,7 @@
 # Cost information
 
 In this section we define our approach to estimate the average access cost for each hexagon.
-We start by defined the layers of information to define all possible methods of tranport.
+We begin by describing the information layers used to define transport methods.
 We then define our approach to calculate the access cost for each hexagon, given the transport method and its respective parameters.
 Finally, we present the equations to calculate the inclusion probability given the average cost of access.
 
@@ -10,7 +10,7 @@ Finally, we present the equations to calculate the inclusion probability given t
 We used four layers of information to calculate the cheapest cost of access of a site: roads, trails, trains, and airports.
 Roads are used for truck transport and are mainly available in the southern part of the study area.
 Trails are available in more remote areas to be acessed by ATVs, but is relatively irrelevant given the amout of trails over the study area.
-Trails are used by ATVs to access more remote areas, but their coverage throughout the study area is relatively small compared to roads.
+Trails are used by ATVs to access remote areas, but their distribution overlaps with roads.
 For roads and trails, a buffer of size specified in @tbl-costPars is defined around each line of access to create an accessible region by these methods of transport.
 The final access cost (AC) for a method of transport $x$ is constant inside the buffer and is calculated as:
 
@@ -19,7 +19,7 @@ $$
 $$
 
 The parameters are defined in @tbl-costPars, $x$ is either roads or trails.
-We then rasterize the road and trail buffer polygons to a 30-meter resolution raster to calualte the minimum cost of access for each pixel across the study area.
+We then rasterized the road and trail buffer polygons to a 30-meter resolution raster to calualte the minimum cost of access for each pixel across the study area.
 
 ```{r roadsTrails,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7.5,fig.height=7.5}
 #| label: fig-transport-layers

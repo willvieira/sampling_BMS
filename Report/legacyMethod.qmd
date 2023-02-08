@@ -2,7 +2,7 @@
 
 Current methods to include historical surveys are limited to randomly selected sites.
 While they adjust the inclusion probability to avoid sampling near historical sites, there is no consideration for sample size adjustment.
-Here we propose a novel approach where, in addition to modifying the inclusion probability, we also adjust the sample size according to the distribution of historic sites.
+Here we propose a novel approach where, in addition to modifying the inclusion probability, we also adjust the sample size according to the distribution of historical sites.
 
 ## Theoretical description
 
@@ -681,12 +681,7 @@ best_buffer <- eco_nbHexas |>
     )
 
 # compute the adjusted sample size for the two ecoregions=
-hx_99 <- hexas |>
-    filter(ecoregion == '99')
-hx_217 <- hexas |>
-    filter(ecoregion == '217')
-
-legacy_buff_99 <- hx_99 |>
+legacy_buff_99 <- hexas |>
     filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 99 & nbLegacy > 0)$ET_Index) |>
     st_buffer(subset(best_buffer, ecoregion == 99)$opt_bsMean)
 
@@ -697,7 +692,7 @@ nbHex_99 <- hexas |>
     apply(1, any) |>
     sum()
 
-legacy_buff_217 <- hx_217 |>
+legacy_buff_217 <- hexas |>
     filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 217 & nbLegacy > 0)$ET_Index) |>
     st_buffer(subset(best_buffer, ecoregion == 217)$opt_bsMean)
 
@@ -736,55 +731,46 @@ The adjusted sample size taking into account the distribution and number of hist
 #| label: fig-ecosExample
 #| fig-cap: "Distribution of historical sites and their coverage according to the optimal buffer size specific for the ecoregion."
 
-p1 <- hx_99 |>
+hexas |>
+    filter(ecoregion %in% c(99, 217)) |>
     st_union() |>
     ggplot() +
         geom_sf() +
         geom_sf(
             data = hexas |>
-                    filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 99 & nbLegacy > 0)$ET_Index) |>
-                    st_buffer(subset(best_buffer, ecoregion == 99)$opt_bsMean) |>
-                    st_union(),
-                fill = 'red',
-                alpha = .4,
-                color = NA
+                filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 99 & nbLegacy > 0)$ET_Index) |>
+                st_buffer(subset(best_buffer, ecoregion == 99)$opt_bsMean) |>
+                st_union(),
+            fill = 'red',
+            alpha = 0.4,
+            color = NA
         ) +
         geom_sf(
             data = hexas |>
-                    filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 99 & nbLegacy > 0)$ET_Index),
+                filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 217 & nbLegacy > 0)$ET_Index) |>
+                st_buffer(subset(best_buffer, ecoregion == 217)$opt_bsMean) |>
+                st_union(),
+            fill = 'red',
+            alpha = 0.4,
+            color = NA
+        ) +
+        geom_sf(
+            data = hexas |>
+                    filter(ET_Index %in% subset(nbLegacy_hex, nbLegacy > 0)$ET_Index),
             fill = 'red',
             color = NA
         ) +
-        theme_minimal() +
-        coord_sf(crs = 4326) +
-        ggtitle(label = "Ecoregion 99<br><span style='color:#e93a2a'>Historical sites</span>: 579") +
-        theme(plot.title = element_markdown())
-
-p2 <- hx_217 |>
-    st_union() |>
-    ggplot() +
-        geom_sf() +
-        geom_sf(
-            data = hexas |>
-                    filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 217 & nbLegacy > 0)$ET_Index) |>
-                    st_buffer(subset(best_buffer, ecoregion == 217)$opt_bsMean) |>
-                    st_union(),
-                fill = 'red',
-                alpha = .4,
-                color = NA
+        geom_textbox(
+            aes(x = -73.5, y = 52.2, label = "**Ecoregion 217**<br><span style='color:red'>Historical sites</span>: 96<br>Initial sample size: 56<br>Adjuted sample size: 22"),
+            width = .30
         ) +
-        geom_sf(
-            data = hexas |>
-                    filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 217 & nbLegacy > 0)$ET_Index),
-            fill = 'red',
-            color = NA
+        geom_textbox(
+            aes(x = -78.5, y = 49, label = "**Ecoregion 99**<br><span style='color:red'>Historical sites</span>: 579<br>Initial sample size: 72<br>Adjuted sample size: 3"),
+            width = .30
         ) +
         theme_minimal() +
         coord_sf(crs = 4326) +
-        ggtitle(label = "Ecoregion 217<br><span style='color:#e93a2a'>Historical sites</span>: 97") +
-        theme(plot.title = element_markdown())
-
-ggarrange(p1, p2, ncol = 2)
+        xlab('') + ylab('')
 ```
 
 

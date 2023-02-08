@@ -21,7 +21,7 @@ ecor = readRDS(file.path('..', 'data', 'districts.RDS'))
 
 The study area for Quebec is outlined in @fig-study-area.
 It was expanded beyond the Boreal boundary to include the Arctic ecosystems.
-The study area contains a total of 7 ecoregions, and their sizes and proportions are described in @tbl-ecozone:
+The study area contains a total of 7 ecozones, and their sizes and proportions are described in @tbl-ecozone:
 
 ```{r tableEcoz,echo=FALSE,message=FALSE,warning=FALSE}
 #| label: tbl-ecozone
