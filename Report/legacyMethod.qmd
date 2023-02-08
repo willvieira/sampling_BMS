@@ -727,7 +727,7 @@ The optimal buffer size in fuction of the proportion of historical sites for the
 The adjusted sample size taking into account the distribution and number of historical sites was reduced from `r round(subset(nbLegacy_eco, ecoregion == 99)$nSample, 0)` to `r round(subset(nbLegacy_eco, ecoregion == 99)$N_adj, 0)` for ecoregion 99, and from `r round(subset(nbLegacy_eco, ecoregion == 217)$nSample, 0)` to `r round(subset(nbLegacy_eco, ecoregion == 217)$N_adj, 0)` for ecoregion 217 (@fig-ecosExample).
 
 
-```{r figEcosExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=10,fig.height=5}
+```{r figEcosExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
 #| label: fig-ecosExample
 #| fig-cap: "Distribution of historical sites and their coverage according to the optimal buffer size specific for the ecoregion."
 
