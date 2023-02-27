@@ -50,19 +50,21 @@ set.seed(0.0)
         '217'#, '217N', '217S'
     )
     
-    # Buffer size (in Km) to adjust sample size given nb of legacy sites
-    bufferSize_N = 18
-
-    # Buffer size (in Km) to adjust inclusion probability around legacy sites
-    bufferSize_p = 10
-
-    # Distance between SSU centroid (in meters)
-    ssu_dist = 294
-
     # Name of file and columns to extract legacy
     legacyFile = file.path('data', 'legacySites.csv')
     lat = 'latitude'
     lon = 'longitude'
+
+    # Buffer size (in Km) to adjust inclusion probability of hexagons around legacy sites
+    bufferSize_p = 10
+
+    # Buffer size (in Km) to adjust sample size of ecoregion in function of the number and distribution of legacy site
+    # It can be a number that will be used for all ecoregion or a file address with the specific buffer size for each ecoregion
+    bufferSize_N = file.path('data', 'bufferSize_N.csv')
+
+    # Distance between SSU centroid (in meters)
+    ssu_dist = 294
+
 
     # Output folder to save the shapefiles with PSU and SSU
     outputFolder = file.path('..', '..', 'ownCloud', 'BMS_Bruno', 'selection2023')
@@ -140,17 +142,39 @@ set.seed(0.0)
 
 # Calculate sample size given number of hexagons and legacy sites
 
+    # define buffer size to adjust sample size
+    if(is.character(bufferSize_N)) {
+        if(file.exists(bufferSize_N)) {
+            buffSizeN <- read_csv(bufferSize_N, show_col_types = FALSE) |>
+                mutate(ecoregion = as.character(ecoregion))
+        }else{
+            stop(paste0('File "', bufferSize_N, '" does not exist. Please check if the name is correct.'))
+        }
+    }else if(is.numeric(bufferSize_N)){
+        buffSizeN <- tibble(
+            ecoregion = eco_sim,
+            bufferSize = bufferSize_N
+        )
+    }else{
+        stop('Type of `bufferSize_N` must be either a numeric or a character')
+    }
+    
+    # function to get sample size for a specific ecoregion given:
+    # number of hexagons, number of legacy sites, bufferSize, and sample effort
     get_sampleSize <- function(eco, hx, bf_N, sample_e)
     {
+        # get the hexagons centroid for a ecoregion
         hexa_eco <- hx %>%
             filter(ecoregion == eco) %>%
             st_centroid()
 
+        # create a buffer of size BufferSize_N around legacy sites
         hexa_legacy_bf <- hexa_eco %>%
             filter(nbLegacySites > 0) %>%
-            st_buffer(bf_N * 1000) %>%
+            st_buffer(subset(bf_N, ecoregion == eco)$bufferSize * 1000) %>%
             st_union()
 
+        # Compute number of hexagons in which centroid is inside legacy buffer
         nbHexas_legacy <- hexa_eco %>%
             st_intersects(hexa_legacy_bf) %>%
             unlist() %>%
