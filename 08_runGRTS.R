@@ -195,13 +195,9 @@ set.seed(0.0)
         setNames(eco_sim, paste0('eco_', eco_sim)),
         get_sampleSize,
         hx = hexas,
-        bf_N = bufferSize_N,
+        bf_N = buffSizeN,
         sample_e = sample_effort
     )
-
-
-    # if ecoregion is too small, assure to sample at least two hexagons for all ecoregions
-    sampleSize[sampleSize < 2] = 2
 
 #
  
