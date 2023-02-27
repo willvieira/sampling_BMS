@@ -180,7 +180,14 @@ set.seed(0.0)
             unlist() %>%
             sum()
         
-        round((nrow(hexa_eco) - nbHexas_legacy) * sample_e, 0)
+        # Compute adjusted sample size
+        adj_sampleSize <- round((nrow(hexa_eco) - nbHexas_legacy) * sample_e, 0)
+
+        # Only if ecoregion is too small, assure to sample at least two hexagons for all ecoregions
+        if((nrow(hexa_eco) * sample_e) < 2 & nbHexas_legacy < 1)
+            adj_sampleSize = 2
+
+        return(adj_sampleSize)
     }
 
 
