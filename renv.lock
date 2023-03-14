@@ -2232,10 +2232,10 @@
     },
     "spsurvey": {
       "Package": "spsurvey",
-      "Version": "5.3.0",
+      "Version": "5.4.1",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "2904a48887792310d61a8937d1e43865",
+      "Hash": "520db3b10702830353bf017bac3b1959",
       "Requirements": [
         "MASS",
         "boot",
