@@ -1,4 +1,16 @@
-# Running the GRTS in R
+---
+title: "Running the GRTS in R"
+format:
+  html:
+    theme: flatly
+    toc: true
+    code-fold: show
+    code-tools: true
+---
+
+```{r setup,echo=FALSE}
+Eval=FALSE
+```
 
 ## Setup
 
@@ -16,7 +28,7 @@ renv::activate(project = "/path/to/project")
 
 This function will install all necessary packages with their correct version. Make sure to replace /path/to/project with the path to the directory where the project is stored. This will ensure that all the required packages and their specific versions are installed and loaded correctly.
 
-```{r loadPackages,results='hide',message=FALSE,warning=FALSE}
+```{r loadPackages,results='hide',message=FALSE,warning=FALSE,eval=Eval}
 library(raster)
 library(exactextractr)
 library(tidyverse)
@@ -31,7 +43,7 @@ set.seed(0.0)
 
 ## parameters
 
-```{r parameters}
+```{r parameters,eval=Eval}
 # Maximum proportion of NA pixels (non-habitat) in a hexagon
 # if 0.8, it means an hexagon has to have at least 20% of habitat pixels
 prop_na = 0.8
@@ -68,6 +80,8 @@ bufferSize_p = 10
 # Buffer size (in Km) to adjust sample size of ecoregion in function of the number and distribution of legacy site
 # It can be a number that will be used for all ecoregion or a file address with the specific buffer size for each ecoregion
 bufferSize_N = file.path('..', 'data', 'bufferSize_N.csv')
+# If you want to assign the same buffer size (in Km) for all ecoregion:
+# bufferSize_N = 15
 
 # Distance between SSU centroid (in meters)
 ssu_dist = 294
@@ -83,7 +97,7 @@ fileSuffix = 'V2023'
 
 ## Prepare hexagons
 
-```{r loadHex}
+```{r loadHex,eval=Eval}
 hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS')) |>
     filter(propNA <= prop_na) |>
     filter(ecoregion %in% eco_sim) |>
@@ -96,7 +110,7 @@ hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS')) |>
 
 ## legacy sites
 
-```{r legacySites,warning=FALSE,message=FALSE}
+```{r legacySites,warning=FALSE,message=FALSE,eval=Eval}
 # function to transform Latitude & longitude legacy site points in a table
 # with the number of points per hexagon ID (ET_Index)
 import_legacySites <- function(File, lat_name, lon_name)
@@ -143,7 +157,9 @@ hexas <- hexas |>
 
 ## Calculate sample size given number of hexagons and legacy sites
 
-```{r sampleSize,warning=FALSE,message=FALSE}
+The input `bufferSize_N` can be either a character or a numeric value, and the buffer size is adjusted accordingly.
+
+```{r sampleSize,warning=FALSE,message=FALSE,eval=Eval}
 # define buffer size to adjust sample size
 if(is.character(bufferSize_N)) {
     if(file.exists(bufferSize_N)) {
@@ -208,7 +224,7 @@ sampleSize <- map_dbl(
 
 ## GRTS simulations
 
-```{r runGRTS, warning=FALSE,message=FALSE}
+```{r runGRTS, warning=FALSE,message=FALSE,eval=Eval}
 # Sample size by stratum (ecoregion)
 # Keep ecoregion with at least a sample of 1
 Stratdsgn  <- sampleSize[sampleSize > 0]
@@ -303,7 +319,7 @@ selected_over <- hexas |>
 Select one of the 6 neighbor hexagons with the highest inclusion probability
 loop over ecoregions to make sure neighbours are from the same ecoregion
 
-```{r neighbor, message=FALSE,warning=FALSE}
+```{r neighbor, message=FALSE,warning=FALSE,eval=Eval}
 selected_extra <- hexas[0, ]
 for(eco in parse_number(names(Stratdsgn)))
 {
@@ -348,3 +364,440 @@ for(eco in parse_number(names(Stratdsgn)))
 }
 ```
 
+
+## Select SSU
+
+```{r selectSSU,message=FALSE,warning=FALSE,eval=Eval}
+land_ca <- raster('data/landcover_ca_30m.tif')
+prev_all <- readRDS(file.path('..', 'data', 'prev_all.RDS'))
+
+# function to generate SSU points (from: https://github.com/dhope/BASSr)
+genSSU <- function(h, spacing)
+{
+    ch <- as_tibble(st_coordinates(h))
+    top_point <- ch[which.max(ch$Y),]
+    bottom_point <- ch[which.min(ch$Y),]
+    gridsize <- 2*floor(abs(top_point$Y-bottom_point$Y)/spacing)+3
+    rowAngle <- tanh((top_point$X-bottom_point$X)/(top_point$Y-bottom_point$Y))
+
+    cent <- st_centroid(h) |>
+        bind_cols(as_tibble(st_coordinates(.))) |>
+        st_drop_geometry |>
+        dplyr::select(ET_Index, X, Y)
+
+    genRow <- function(cX, cY, sp,...){
+        tibble(rowid = seq(-gridsize,gridsize)) |>
+        mutate(X = sin(60*pi/180+rowAngle) *sp*rowid + {{cX}},
+                Y = cos(60*pi/180+rowAngle) *sp*rowid  + {{cY}})
+    }
+
+    centroids <- tibble(crowid=seq(-gridsize,gridsize)) |>
+        mutate(cY = cos(rowAngle) *spacing*crowid + cent$Y,
+            #spacing/2*crowid + cent$Y,
+            cX =  sin(rowAngle) *spacing*crowid + cent$X) |>
+        #cent$X + crowid* sqrt(spacing**2-(spacing/2)**2)) |>
+        rowwise() |>
+        mutate(row = list(genRow(cX = cX,cY = cY,sp = spacing))) |>
+        unnest(row) |>
+        dplyr::select(X,Y) |>
+        st_as_sf(coords = c("X", "Y"), crs = st_crs(h)) |>
+        st_filter(h) |>
+        mutate(
+            ET_Index = h$ET_Index,
+            ecoregion = h$ecoregion,
+            ssuID = row_number()
+        )
+    return(centroids)
+}
+
+
+# function to sample SSU
+sample_SSU <- function(ssuid, prob, geom, filtered, ssuDist, N)
+{
+    # check if N is even
+    if(N %% 2 != 0)
+        stop('`ssu_N` must be a even number.')
+
+    filtered_1 <- filtered
+    out <- rep(0, length(filtered))
+
+    # loop to sample 4
+    count = 1
+    while(
+        count <= N &
+        sum(get(paste0('filtered_', count))) > 1
+    ){
+        # sample point
+        assign(
+            paste0('sample_', count),
+            sample(
+                ssuid[get(paste0('filtered_', count))],
+                size = 1,
+                prob = prob[get(paste0('filtered_', count))]
+            )
+        )
+
+        # remove points around the first sample for second point
+        toKeep <- !st_intersects(
+            geom,
+            st_buffer(
+                geom[which(get(paste0('sample_', count)) == ssuid)],
+                dist = ssuDist * 2 + ssuDist * 0.1),
+                sparse = FALSE
+        )[, 1]
+
+        # update available points
+        assign(
+            paste0('filtered_', count + 1),
+            get(paste0('filtered_', count)) & toKeep
+        )
+
+        # assign point to output vector
+        out[get(paste0('sample_', count))] = count
+        
+        count = count + 1
+    }
+    return( out )
+}
+
+# Sample SSU points for each of the selected hexagon layers
+# main, over, and extra
+
+for(lyr in c('main', 'over', 'extra'))
+{
+    sel_lyr <- get(paste0('selected_', lyr))
+
+    # Generate SSU points
+    SSUs <- map_dfr(
+        seq_len(nrow(sel_lyr)),
+        ~ genSSU(sel_lyr[.x, ], spacing = ssu_dist)
+    )
+
+    # Buffer of half `ssu_dist` to compute habitat inclusion prob
+    SSU_bf <- st_buffer(SSUs, dist = ssu_dist/2)
+
+    # extract pixels for each SSU polygon
+    hab_pixels <- exactextractr::exact_extract(
+        land_ca,
+        SSU_bf,
+        progress = FALSE
+    )
+    rm(SSU_bf)
+
+    # get frequence of each class of habitat
+    count_hab <- Map(
+                function(x, y) {
+                    freq <- table(x$value)
+                    if(length(freq) > 0) {
+                        data.frame(freq, ecoregion = y)
+                    }else{
+                        NA
+                    }
+                },
+                x = hab_pixels,
+                y = SSUs$ecoregion
+            )
+
+    # merge with inclusion probability
+    # and calculate inclusion probbaility for each NON empty polygon
+    SSUs$incl_prob <- unlist(
+            lapply(
+                count_hab,
+                function(x) {
+                    if(is.data.frame(x)) {
+                        mg_df <- merge(x, subset(prev_all, ID_ecoregion == x$ecoregion[1]), by.x = "Var1", by.y = "code" , all.x = TRUE)
+                        sum(mg_df$Freq * mg_df$incl_prob)
+                    }else{
+                        NA
+                    }
+                }
+            )
+        )
+    rm(count_hab)
+
+    SSUs <- SSUs |>
+        group_by(ET_Index) |>
+        mutate(
+            incl_prob = incl_prob/sum(incl_prob, na.rm = TRUE)
+        ) |>
+        ungroup()
+
+
+    # Calculate proportion of NA
+    SSUs$propNA <- map_dbl(
+        hab_pixels,
+        ~ sum(is.na(.x$value))/nrow(.x)
+    )
+    rm(hab_pixels)
+
+    # neighbours matrix
+    neighbour_ls <- list()
+    for(hx in unique(SSUs$ET_Index))
+    {
+        ssuhx <- subset(SSUs, ET_Index == hx)
+
+        neighbour_ls[[hx]] <- st_intersects(
+            ssuhx,
+            st_buffer(ssuhx, dist = ssu_dist + ssu_dist * 0.1),
+            sparse = FALSE
+        )
+    }
+
+
+    # These are the following rules to a SSU be available to be sampled:
+    # - Must have 6 neighbours (less than that means it's a border SSU)
+    # - Must have at least 1 - `prop_na` of non empty pixels
+    # - 4 out 6 neighbours must also respect the above rule
+    SSU_selected = SSUs |>
+        group_by(ET_Index) |>
+        mutate(
+            nbNeighb = map_dbl(
+                ssuID,
+                ~ sum(neighbour_ls[[unique(ET_Index)]][, .x]) - 1
+            ),
+            nbPropNA = map_int(
+                ssuID,
+                .f = function(x, pNA, ETI)
+                    sum(
+                        pNA[setdiff(which(neighbour_ls[[ETI]][, x]), x)] <= prop_na
+                    ),
+                pNA = propNA,
+                ETI = unique(ET_Index)
+            ),
+            sampled = sample_SSU(
+                ssuid = ssuID,
+                prob = incl_prob,
+                geom = geometry,
+                filtered = propNA <= prop_na & nbNeighb == 6  & nbPropNA >= 4,
+                ssuDist = ssu_dist,
+                N = ssu_N
+            )
+        ) |>
+        ungroup()
+
+    # Prepare selected SSU and their specific neighbours with code like `A_B`
+    # `A` is for the SSU sample ID (1:`ssu_N`)
+    # `B` is for the neighbour ID (0:6 where zero is the focal point, and 1:6 are the 6 neighbours starting from the top point moving clockwise)
+    SSU_lyr <- subset(SSU_selected, sampled > 0)
+    SSU_lyr_ls <- list()
+
+    for(i in 1:nrow(SSU_lyr))
+    {
+        # get neighbours for specific row
+        nei_hx <- SSU_selected |> 
+            filter(ET_Index == SSU_lyr$ET_Index[i]) |> 
+            filter(ssuID %in% which(neighbour_ls[[SSU_lyr$ET_Index[i]]][, SSU_lyr$ssuID[i]]))
+
+        # code A 
+        nei_hx$codeA <- SSU_lyr$sampled[i]
+        
+        # code B
+        nei_hx$codeB <- c(4, 3, 5, 0, 2, 6, 1)
+
+        SSU_lyr_ls[[i]] <- nei_hx
+    }
+
+    # save
+    assign(
+        paste0('SSU_all_', lyr),
+        SSU_selected
+    )
+    assign(
+        paste0('SSU_', lyr),
+        do.call(rbind, SSU_lyr_ls)
+    )
+}
+
+#
+
+# Prepare export of shapefiles
+#################################################
+
+# All ecoregion together
+#################################################
+savePath = file.path(outputFolder, 'allEcoregion')
+dir.create(savePath, recursive = TRUE)
+
+varsToRm = c('OBJECTID', 'Join_Count', 'TARGET_FID', 'ET_ID', 'ET_ID_Old', 'ET_IDX_Old')
+
+hexas_save <- hexas |>
+    select(-all_of(varsToRm))
+
+# rename attributes table so it has a maximum of 10 characters
+names(hexas_save) <- abbreviate(names(hexas_save), minlength = 10)
+
+# add coordinates
+coords <- hexas_save |>
+    sf::st_centroid() |>
+    sf::st_transform(4326) |>
+    sf::st_coordinates() |>
+    as.data.frame()
+
+hexas_save <- hexas_save |>
+    mutate(
+        latitude = coords$Y,
+        longitude = coords$X
+    )
+
+# save all PSU
+hexas_save |>
+    write_sf(
+        file.path(
+            savePath,
+            paste0('PSU-SOBQ_ALL-', fileSuffix, '.shp')
+        )
+    )
+
+# Selected PSUs
+for(lyr in c('main', 'over', 'extra'))
+{
+    hexas_save |>
+        filter(
+            ET_Index %in% get(paste0('selected_', lyr))$ET_Index
+        ) |>
+        write_sf(
+            file.path(
+                savePath,
+                paste0('PSU-SOBQ_', lyr, '-', fileSuffix, '.shp')
+            )
+        )
+}
+
+# Save all SSU
+for(lyr in c('main', 'over', 'extra'))
+{
+    # SSU main
+    SSU_lyr <- get(paste0('SSU_all_', lyr)) |>
+        select(-c('nbNeighb', 'nbPropNA', 'sampled'))
+
+    coords <- SSU_lyr |>
+        sf::st_transform(4326) |>
+        sf::st_coordinates() |>
+        as.data.frame()
+
+    SSU_lyr |>
+        mutate(
+            latitude = coords$Y,
+            longitude = coords$X
+        ) |>
+        write_sf(
+            file.path(
+                savePath,
+                paste0('SSU-SOBQ_ALL_', lyr, '-', fileSuffix, '.shp')
+            )
+        )
+}
+
+# Save selected SSU
+for(lyr in c('main', 'over', 'extra'))
+{
+    # SSU main
+    SSU_lyr <- get(paste0('SSU_', lyr)) |>
+        select(-c('nbNeighb', 'nbPropNA', 'sampled'))
+
+    coords <- SSU_lyr |>
+        sf::st_transform(4326) |>
+        sf::st_coordinates() |>
+        as.data.frame()
+
+    SSU_lyr |>
+        mutate(
+            latitude = coords$Y,
+            longitude = coords$X
+        ) |>
+        write_sf(
+            file.path(
+                savePath,
+                paste0('SSU-SOBQ_selected_', lyr, '-', fileSuffix, '.shp')
+            )
+        )
+}
+
+# by ecoregion
+#################################################
+
+for(eco in eco_sim)
+{
+    # create folder
+    eco_path <- file.path(outputFolder, 'byEcoregion', paste0('ecoregion_', eco))
+    dir.create(eco_path, recursive = TRUE)
+
+    # PSU
+    ###########################################
+    hexas_save |>
+        filter(ecoregion == eco) |>
+        write_sf(
+            file.path(
+                eco_path,
+                paste0('PSU-SOBQ_eco', eco, '_ALL-', fileSuffix, '.shp')
+            )
+        )
+
+    for(lyr in c('main', 'over', 'extra'))
+    {
+        hexas_save |>
+            filter(ET_Index %in% subset(get(paste0('selected_', lyr)), ecoregion == eco)$ET_Index) |>
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('PSU-SOBQ_eco', eco, '_', lyr, '-', fileSuffix, '.shp')
+                )
+            )
+    }
+
+    # SSU
+    ###########################################
+
+    # Save all SSU
+    for(lyr in c('main', 'over', 'extra'))
+    {
+        # SSU main
+        SSU_lyr <- get(paste0('SSU_all_', lyr)) |>
+            filter(ecoregion == eco) |>
+            select(-c('nbNeighb', 'nbPropNA', 'sampled'))
+
+        coords <- SSU_lyr |>
+            sf::st_transform(4326) |>
+            sf::st_coordinates() |>
+            as.data.frame()
+
+        SSU_lyr |>
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) |>
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('SSU-SOBQ_eco', eco, '_ALL_', lyr, '-', fileSuffix, '.shp')
+                )
+            )
+    }
+
+    # Save selected SSU
+    for(lyr in c('main', 'over', 'extra'))
+    {
+        # SSU main
+        SSU_lyr <- get(paste0('SSU_', lyr)) |>
+            filter(ecoregion == eco) |>
+            select(-c('nbNeighb', 'nbPropNA', 'sampled'))
+
+        coords <- SSU_lyr |>
+            sf::st_transform(4326) |>
+            sf::st_coordinates() |>
+            as.data.frame()
+
+        SSU_lyr |>
+            mutate(
+                latitude = coords$Y,
+                longitude = coords$X
+            ) |>
+            write_sf(
+                file.path(
+                    eco_path,
+                    paste0('SSU-SOBQ_eco', eco, '_selected_', lyr, '-', fileSuffix, '.shp')
+                )
+            )
+    }
+}
+```
