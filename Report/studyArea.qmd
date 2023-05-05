@@ -1,4 +1,4 @@
-# Study area
+# Sampling frame
 
 ```{r loadAreaEcoz,echo=FALSE,message=FALSE,warning=FALSE}
 suppressPackageStartupMessages(library(sf))
@@ -15,6 +15,7 @@ ecoz = read_sf(file.path('data', 'Ecozones', 'ecozones.shp')) |>
     select(Ecozone)
 prov = readRDS(file.path('data', 'province.RDS'))
 ecor = readRDS(file.path('..', 'data', 'districts.RDS'))
+hexas = readRDS(file.path('..', 'data', 'hexa_complete.RDS'))
 ```
 
 ## Area of study
@@ -74,12 +75,16 @@ prov |>
         xlab('') + ylab('')
 ```
 
+In order to accommodate habitat heterogeneity, the study area was hierarchically stratified into different levels of spatial aggregation.
+Below, we will provide a brief description of each of these strata, ranging from the ecoregion level to the specific sampling point level.
+For a more comprehensive explanation of the reasoning behind each stratification, please refer to @Wilgenburg2020.
+
 ## Ecoregion
 
 The ecoregion is the first level of aggregation in the sampling design.
-The sample size and habitat inclusion probability (described in the following sections) are defined for each separate ecoregion.
+The sample size and habitat inclusion probability (described in the next chapter) are defined for each separate ecoregion.
 There are a total of `r length(ecor$ECOREGION)` ecoregions in the study area (@fig-ecoregion), and their details are described in @tbl-ecoregion.
-Ecoregion 131 was excluded from the study area because it was too small to support enough sampling points for a random sampling design.
+Ecoregion 131 was excluded from the study area because it was too small to support enough sampling points for the random sampling design.
 
 ```{r tableEcoz,echo=FALSE,message=FALSE,warning=FALSE}
 #| label: tbl-ecoregion
@@ -107,6 +112,10 @@ select(Code, Name, `Area (% prop)`) |>
 kbl(format = 'markdown', align = 'c')
 ```
 
+The sample size for this study was determined solely based on the size of the ecoregion.
+While the BOSS design considered bird species richness to increase sampling in regions with more bird species, we chose not to use this metric because it may be biased by sampling efforts in the southern region, potentially increasing sampling bias in already well-covered regions.
+Our goal was to sample 2% of the available hexagons (PSU described below) in each ecoregion.
+We defined a hexagon as available for sampling if at least 20% of it contained natural habitat types.
 
 ```{r printEcoregion,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
 #| label: fig-ecoregion
@@ -126,29 +135,107 @@ ecor |>
         xlab('') + ylab('')
 ```
 
-## Hexagons
+## Primary Sampling Unit (PSU)
 
-Similarly to the BOSS design, we used the 5 km diameter hexagon as the Primary Sampling Unit (PSU).
-This is the lowest level of aggregation before performing the stratified sample with the GRTS algorithm.
-We selected only the hexagons in which their centroid fall into the study area.
-Each hexagon is classified into one of the ecoregions following the same centroid rule.
-@fig-eco131 shows an example of the selection approach.
+We followed the BOSS design by using a 5 km diameter hexagon (@fig-PSUSSU) as the Primary Sampling Unit (PSU).
+This was the lowest level of aggregation before performing the stratified sample with the GRTS algorithm.
+We selected only the hexagons whose centroid fell within the study area.
+Similarly, each hexagon was classified into one of the ecoregions using the same centroid rule.
+The number of hexagons, available hexagones, and sample size is described in @tbl-sampleSize.
 
-```{r printEco131,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7.5,fig.height=7.5}
-#| label: fig-eco131
-#| fig-cap: "Distribution of selected (green) and non-selected (red) hexagons as a function of whether or not their respective centroid falls within the ecoregion (shaded area). The illustration uses the ecoregion 131 - Iles-de-la-Madeleine as an example."
+```{r tableSampleSize,echo=FALSE,message=FALSE,warning=FALSE}
+#| label: tbl-sampleSize
+#| tbl-cap: Distribution of total hexagons, hexagons with at least 20% of natural habitats, and sample size across the ecoregions.
 
-hex_131 <- readRDS(file.path('data', 'eco_131_exampleHexagonSelection.RDS')) |>
-    filter(Area > 16.3)
+hexas |>
+    st_drop_geometry() |>
+    filter(
+        ecoregion %in% grep('N|S', ecoregion, invert = TRUE, value = TRUE)
+    ) |>
+    group_by(ecoregion) |>
+    mutate(
+        nbHex = n(),
+        nbHex_fil = sum(propNA <= 0.8, na.rm = TRUE),
+        sampleSize = round(nbHex_fil * 0.02, 0)
+    ) |>
+    filter(row_number() == 1) |>
+    ungroup() |>
+    left_join(
+        ecor |>
+            mutate(ecoregion = as.character(ECOREGION)) |>
+            select(ecoregion, REGION_NAM)
+    ) |>
+    mutate(
+        Code = ecoregion,
+        Name = REGION_NAM,
+        `Total Hexagons` = nbHex_fil,
+        `Available Hexagons` = nbHex_fil,
+        `Sample size` = sampleSize
+    ) |>
+    select(Code, Name, `Total Hexagons`, `Available Hexagons`, `Sample size`) |>
+    kbl(format = 'markdown', align = 'c')
+```
 
-ecor |>
-    filter(ECOREGION == 131) |>
-    ggplot() +
-        geom_sf(fill = 'black', color = 'black') +
-        geom_sf(data = hex_131, aes(alpha = 0.2, fill = isEco)) +
-        geom_sf(data = hex_131 |> st_centroid())+  
-        coord_sf(crs = 4326) +
-        theme_minimal() +
-        theme(legend.position = 'none') +
-        xlab('') + ylab('')
+## Secondary Sampling Unit (SSU)
+
+For each PSU hexagon, we created a grid of Secondary Sampling Units (SSUs).
+The SSU represents the ultimate sampling locations to be utilized in the field.
+Instead of using the proposed 300-meter distance from the BOSS design, we followed the approach used in the Ontario regionalization design, where each SSU was separated by 294 meters.
+We made this small reduction in distance to ensure that the same number of SSUs were present across all PSU hexagons.
+The distribution of SSUs within an hexagon is shown in Figure1.
+@fig-PSUSSU displays the distribution of Secondary Sampling Units (SSUs) within a hexagon.
+
+```{r ssuExp,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+#| label: fig-PSUSSU
+#| fig-cap: "Distribution of Seconday Sampling Units (SSUs) within an Primary Sampling Unit (PSU) hexagon."
+
+# function to generate SSU points (from: https://github.com/dhope/BASSr)
+genSSU <- function(h, spacing)
+{
+    ch <- as_tibble(st_coordinates(h))
+    top_point <- ch[which.max(ch$Y),]
+    bottom_point <- ch[which.min(ch$Y),]
+    gridsize <- 2*floor(abs(top_point$Y-bottom_point$Y)/spacing)+3
+    rowAngle <- tanh((top_point$X-bottom_point$X)/(top_point$Y-bottom_point$Y))
+
+    cent <- st_centroid(h) %>%
+        bind_cols(as_tibble(st_coordinates(.))) %>%
+        st_drop_geometry %>%
+        dplyr::select(ET_Index, X, Y)
+
+    genRow <- function(cX, cY, sp,...){
+        tibble(rowid = seq(-gridsize,gridsize)) %>%
+        mutate(X = sin(60*pi/180+rowAngle) *sp*rowid + {{cX}},
+                Y = cos(60*pi/180+rowAngle) *sp*rowid  + {{cY}})
+    }
+
+    centroids <- tibble(crowid=seq(-gridsize,gridsize)) %>%
+        mutate(cY = cos(rowAngle) *spacing*crowid + cent$Y,
+            #spacing/2*crowid + cent$Y,
+            cX =  sin(rowAngle) *spacing*crowid + cent$X) %>%
+        #cent$X + crowid* sqrt(spacing**2-(spacing/2)**2)) %>%
+        rowwise() %>%
+        mutate(row = list(genRow(cX = cX,cY = cY,sp = spacing))) %>%
+        unnest(row) %>%
+        dplyr::select(X,Y) %>%
+        st_as_sf(coords = c("X", "Y"), crs = st_crs(h)) %>%
+        st_filter(h) %>%
+        mutate(
+            ET_Index = h$ET_Index,
+            ecoregion = h$ecoregion,
+            ssuID = row_number()
+        )
+    return(centroids)
+}
+
+sel_hexas <- subset(hexas, propNA < 0.8)[1, ]
+    
+ggplot(sel_hexas) +
+    geom_sf(aes()) +
+    geom_sf(
+        data = genSSU(sel_hexas, spacing = 294),
+        alpha = .5
+    ) +
+    theme_minimal() +
+    coord_sf(crs = 4326)
 ```

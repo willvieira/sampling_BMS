@@ -64,7 +64,7 @@ The effect of a legacy site ($l$) on the inclusion probability of neighbouring h
 
 ```{r fosterGaussian,echo=FALSE,message=FALSE,warning=FALSE,fig.width=6,fig.height=5}
 #| label: fig-foster-gaussian
-#| fig-cap: "Legacy effect in the inclusion probabiity of neighbouring sites in function their Euclian distance. Each line represents the effect range of legacy sites."
+#| fig-cap: "Legacy effect in the inclusion probabiity of neighbouring sites in function their Euclian distance. Each line represents the effect range of legacy sites. Figure adapted from the vignette 'An Introduction to MBHdesign' found in @Foster2021."
 
 # exp function
 gausFunc = function(dist, sigma) return ( exp(-dist^2/sigma^2) )
@@ -182,3 +182,785 @@ sel_hex |>
 The issue is that when an ecoregion is well covered by historical sites, the sampled hexagons are driven to cluster in smaller available areas.
 When the inclusion probability was adjusted for ecoregion 99, almost a third of the sampled hexagons were clustered in a 20 km buffer.
 In the next section, we will build on this approach so the sample size may also be adjusted in response to historical sites.
+
+
+## A new approach to integrate legacy and iconic sites in spatially balanced designs
+
+Current methods to include historical surveys are limited to randomly selected sites.
+While they adjust the inclusion probability to avoid sampling near historical sites, there is no consideration for sample size adjustment.
+Here we propose a novel approach where, in addition to modifying the inclusion probability, we also adjust the sample size according to the distribution of historical sites.
+
+### Theoretical description
+
+We use a simulated grid with equal inclusion probabilities for all the 7661 hexagons to illustrate our approach.
+Given a 2% sample effort, the sample size for the model grid is 153 hexagons.
+We used two scenarios with contrasting spatial distributions of historical sites to show how their distribution affect sample size (@fig-adj-sampleSize).
+The first scenario (red dots) describe evenly distributed historical sites, while the second (blue dots) describes historical sites grouped in two spatial clusters.
+
+```{r loadPackages_legacyMethod, echo = FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(spatstat))
+suppressPackageStartupMessages(library(sf))
+suppressPackageStartupMessages(library(spsurvey))
+suppressPackageStartupMessages(library(MBHdesign))
+suppressPackageStartupMessages(library(ggtext))
+suppressPackageStartupMessages(library(ggdist))
+suppressPackageStartupMessages(library(ggridges))
+suppressPackageStartupMessages(library(ggpubr))
+```
+
+```{r adj_sampleSize,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
+#| label: fig-adj-sampleSize
+#| fig-cap: "Simulated grid with equal inclusion probabilities among the 7661 hexagons. Two scenarios of historical sites consisting of 20 sites each illustrate the effect of evenly distributed (blue) and clustered historical sites on the sample size."
+
+sfc = st_sfc(st_polygon(list(rbind(c(0,0), c(8,0), c(8,8), c(0,0)))))
+fake_hex <- st_make_grid(sfc, cellsize = .1, square = FALSE)
+
+# spatially balanced legacy sites
+balanced_ls <- c(3640, 7200, 652, 5095, 6692, 6842, 2923, 5087, 392, 1300, 2300, 2231, 3752, 5928, 5120, 5157, 1474, 3790, 6764, 995)
+
+# clustered legacy sites
+unbalanced_ls <- c(1165, 980, 1731, 1728, 1726, 1731, 1166, 1538, 1537, 1164, 5748, 5739, 6032, 5741, 5746, 5744, 5748, 5555, 6597, 554)
+
+# figure with both scenarios
+fake_hex |>
+    ggplot() +
+        geom_sf(fill = 'white', color = 'grey') +
+        #geom_sf_label(data = fake_hex[unbalanced_ls] |> st_as_sf() |> mutate(id = unbalanced_ls), aes(label = id))
+        geom_sf(data = fake_hex[balanced_ls], fill = '#1A85FF', color = 'grey') +
+        geom_sf(data = fake_hex[unbalanced_ls], fill = '#D41159', color = 'grey') +
+        theme_minimal() +
+        ggtitle(label = "Two scenarios of spatial distribution of historical sites<br><span style='color:#1A85FF'>balanced</span>: 20<br><span style='color:#D41159'>unbalanced</span>: 20") +
+        theme(plot.title = element_markdown()) +
+        xlim(.25, 7.8) + ylim(.25, 7.75) +
+        theme(
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank(),
+            axis.text.y=element_blank(),
+            axis.ticks.y=element_blank() 
+        )
+```
+
+The main idea of adjusting the inclusion probability is that the population present in the region around historical sites are well represented by the existing sample.
+We build on this rationale to propose that the sample size of an ecoregion can be similarly adjusted given the spatial coverage of historical sites within the ecoregion.
+The total coverage of a historical site can be defined by a buffer of size $s$.
+Then, the total area of the ecoregion is subtracted by the total area covered by historical sites to determine the final sample size for an ecoregion.
+By adding a buffer size to the historical locations in our grid example, the balanced scenario covered 14% of the total area, whereas the unbalanced scenario only covered 7.5% (@fig-adj-sampleSize2).
+Due to their clustered distribution, the unbalanced historical sites in this example are only 50% as effective at reducing the sample size as the balanced sites.
+This approach hopes to solve the two issues that emerged when only inclusion probability was adjusted.
+First, it offers the opportunity to use both legacy and iconic sites, regardless of the randomness of their distribution.
+Finally, it enables us to accommodate the number and distribution of historical sites in order to adjust the sample size and avoid clustered samples in ecoregions with adequate coverage.
+
+```{r adj_sampleSize2,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=4}
+#| label: fig-adj-sampleSize2
+#| fig-cap: "Grid of sample units and historical sites (red dots) for a simulated region. Using the same approach for adjusting the inclusion probability, a buffer around each historical site is created to calculate the adjusted sampled size."
+
+buffSize <- .33
+
+p1 <- ggplot(fake_hex) +
+    geom_sf(fill = 'white', color = 'grey') +
+    geom_sf(data = fake_hex[balanced_ls], fill = '#D41159', color = 'grey') +
+    geom_sf(data = st_union(st_buffer(fake_hex[balanced_ls], dist = buffSize)), fill = '#D41159', color = 'transparent', alpha = .4) +
+    theme_minimal() +
+    xlim(.25, 7.8) + ylim(.25, 7.75) +
+    theme(
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank() 
+    )
+    
+
+p2 <- ggplot(fake_hex) +
+    geom_sf(fill = 'white', color = 'grey') +
+    geom_sf(data = fake_hex[unbalanced_ls], fill = '#1A85FF', color = 'grey') +
+    geom_sf(data = st_union(st_buffer(fake_hex[unbalanced_ls], dist = buffSize)), fill = '#1A85FF', color = 'transparent', alpha = .4) +
+    theme_minimal() +
+    xlim(.25, 7.8) + ylim(.25, 7.75) +
+    theme(
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank() 
+    )
+
+ggarrange(p1, p2, ncol = 2)
+```
+
+The unsolved issue is how to define the optimal value for the coverage of a historical site ($s$).
+In a perfect spatial balanced distribution of historical sites, the adjusted sample size of an ecoreregion should be reduced by the total number of historical sites.
+Take, for instance, an ecoregion with initial sample size of 80 hexagons.
+The presence of 10 spatially balanced historical sites should yields an adjusted sample size of 70 hexagons.
+Then, the optimal buffer size $s$ must produce an adjusted sample size ($N_{adj}$) that equals the difference between the initial sample size ($N_{base}$) and the number of historical sites ($N_{hist}$), given the historical sites are spatially balanced across the ecoregion (@fig-buffer-target).
+
+```{r produceSimulatedGridFromHexas,echo=FALSE,message=FALSE,warning=FALSE}
+# load hexagons from study area
+hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS'))
+
+# bbox to extract hexagons within a simulated like grid
+outer <- structure(
+    c(-75.602, -71.131, -71.131, -75.602, -75.602, 53.539, 53.539, 51.178, 51.178, 53.539),
+    dim = c(5L, 2L)
+)
+box_polygon <- st_polygon(list(outer)) |>
+    st_sfc(crs = 4326) |>
+    st_transform(st_crs(hexas))
+
+intersect_mt <- hexas |>
+    st_centroid() |>
+    st_intersects(box_polygon, sparse = FALSE)
+
+hexas_sim <- hexas[apply(intersect_mt, 1, any), ]
+
+```
+
+```{r sampleSimulatedGridFromHexas,echo=FALSE,eval=FALSE,message=FALSE,warning=FALSE}
+# Now let's generate a bunch of legacy sites replications that are evenly balanced across the ecoregion using GRTS
+set.seed(0.0)
+
+legacy_ls <- list()
+n_sample <- c(seq(5, 140, 5), seq(155, 1355, 50))
+N_rep <- 15
+
+for(n in 1:length(n_sample))
+{
+    out_ls <- list()
+    for(i in 1:N_rep)
+    {
+        out <- grts(
+            sframe = hexas_sim,
+            n_base = n_sample[n]
+        )
+        out_ls[[i]] <- out$sites_base$ET_Index
+    }
+    legacy_ls[[as.character(n_sample[n])]] <- out_ls
+}
+
+# Now let's calculated the adusted sample size for different values of buffer size
+
+# Function to get number of hexagon within the legacy buffer
+get_nbHex_buffer <- function(hexas, hexas_centroid, legacy_id, buffer_size) {
+    # get legacy buffer
+    leg_bf <- hexas |>
+        filter(ET_Index %in% legacy_id) |>
+        st_buffer(dist = buffer_size)
+
+    # number of hexagons within buffer of legacy sites
+    intersect_mt <- hexas_centroid |>
+        st_intersects(leg_bf, sparse = FALSE)
+
+    return( sum(apply(intersect_mt, 1, any)) )
+}
+
+hexas_sim_cen <- hexas_sim |>
+    st_centroid()
+
+
+buffer_sizes <- c(seq(0, 25000, 1000), seq(27500, 70000, 2500))
+
+legacy_ls |>
+    imap(
+        ~ .x |>
+        enframe() |>
+        group_by(name) |>
+        summarise(ET_Index = unlist(value)) |>
+        mutate(rep = as.factor(name)) |>
+        expand_grid(buffer_size = buffer_sizes) |>
+        group_by(rep, buffer_size) |>
+        summarise(
+            nbHex_buffer = get_nbHex_buffer(
+                hexas_sim,
+                hexas_sim_cen,
+                ET_Index,
+                unique(buffer_size)
+            )
+        ) |>
+        bind_cols(nbLegacy = as.numeric(.y))
+    ) |>
+    bind_rows() |>
+    saveRDS(file.path('data', 'nbHexas_buffer.RDS'))
+```
+
+```{r figNadjvsBufferSize,echo=FALSE,message=FALSE,warning=FALSE,fig.width=6,fig.height=4}
+#| label: fig-buffer-target
+#| fig-cap: "Effect of the buffer size, determining the coverage of historical sites, on the adjusted sample size for a simulated grid with equal inclusion probabilities. Given a spatially balanced distribution of historical sites, the optimal buffer size is determined when the adjusted sample size equals the difference between the initial sample size (N base) and the number of historical sites (N hist). The color gradient around the mean black line represents the 95%, 80%, and 50% confidence intervals for 50 replications of random generated spatially balanced historical sites."
+
+# load data geneerated in above chuck
+nbHexas_buffer <- readRDS(file.path('data', 'nbHexas_buffer.RDS'))
+
+sample_effort = 0.02
+
+eq1 <- substitute(
+    italic(N[adj]) == italic(N[base]) - italic(N[hist])
+)
+eq2 <- substitute(
+    italic(N[base])
+)
+
+# find the optimum buffer size for the example
+opt_bufferSize <- nbHexas_buffer |>
+    filter(nbLegacy == 20) |>
+    mutate(
+        buffer_size = buffer_size/1000,
+        N_adj = (nrow(hexas_sim) - nbHex_buffer) * sample_effort,
+        N_opt = nrow(hexas_sim) * sample_effort - length(balanced_ls)
+    ) |>
+    group_by(rep) |>
+    summarise(opt_bufferSize = buffer_size[which.min(abs(N_adj - N_opt))]) |>
+    summarise(opt_bs = mean(opt_bufferSize)) |>
+    pull(opt_bs)
+
+nbHexas_buffer |>
+    filter(nbLegacy == 20) |>
+    mutate(
+        buffer_size = buffer_size/1000, # units in Km
+        N_initial = nrow(hexas_sim) * sample_effort,
+        N_adj = (nrow(hexas_sim) - nbHex_buffer) * sample_effort
+    ) |>
+    ggplot(aes(buffer_size, N_adj)) +
+        stat_lineribbon() +
+        scale_fill_brewer() +
+        geom_hline(aes(yintercept = nrow(hexas_sim) * sample_effort), linetype = 'dashed', alpha = .7) +
+        geom_hline(aes(yintercept = nrow(hexas_sim) * sample_effort - 20), linetype = 'dashed', alpha = .7) +
+        geom_vline(aes(xintercept = opt_bufferSize), linetype = 'dashed', alpha = .7) +
+        geom_text(aes(x = 20.5, y = nrow(hexas_sim) * sample_effort -20 + 5, label = as.character(as.expression(eq1))), parse = TRUE, hjust = 0, check_overlap = TRUE) +
+        geom_text(aes(x = 20.5, y = nrow(hexas_sim) * sample_effort + 5, label = as.character(as.expression(eq2))), parse = TRUE, hjust = 0, check_overlap = TRUE) +
+        geom_text(aes(x = opt_bufferSize - 1.5, y = 50.5, label = 'Optimum buffer size'), hjust = 0, angle = 90, check_overlap = TRUE) +
+        theme_minimal() +
+        theme(legend.position = 'none') +
+        xlab('Buffer size (Km)') +
+        ylab(parse(text = paste0('"Adjusted sample size"', ' ~ (N[adj])')))
+```
+
+With this approach, we are able to determine the ideal buffer size that will allow us to reduce the sample size without compromising the spatial representation of the initial sampling effort.
+This simulation-based strategy, however, is sensible for the fixed number of historical sites determined a priori.
+In the example grid used in @fig-buffer-target, we simulated 20 historical sites, which represents a 0.2% of the total hexagons in the sample grid.
+We simulated different sets of historical sites ranging from 5 (0.07%) to 1400 (20%) to illustrate its impact on the effect of buffer size on the adjusted sample size (@fig-nbLegacy-target).
+
+```{r figNadjvsnbLegacy,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=4}
+#| label: fig-nbLegacy-target
+#| fig-cap: "Effect of the buffer size on the adjusted sample size while controling for relative abundance of historical sites in the sample grid. Relative proportion of historical sites in the sample grid ranged from 0.07 to 20%."
+
+eq <- substitute(
+    italic(N[hist]) %/% italic(N[total])
+)
+
+nbHexas_buffer |>
+    group_by(buffer_size, nbLegacy) |>
+    summarise(
+        nbHex_buffer = mean(nbHex_buffer)
+    ) |>
+    mutate(
+        buffer_size = buffer_size/1000, # units in Km
+        ratio = nbLegacy/nrow(hexas_sim),
+        N_initial = nrow(hexas_sim) * sample_effort,
+        N_adj = (nrow(hexas_sim) - nbHex_buffer) * sample_effort
+    ) |>
+    ggplot(aes(buffer_size, N_adj, color = ratio, group = ratio)) +
+        geom_line() +
+        scale_color_viridis_c() +
+        theme_minimal() +
+        #theme(legend.position = 'none') +
+        xlab('Buffer size (Km)') +
+        ylab(parse(text = paste0('"Adjusted sample size"', ' ~ (N[adj])'))) +
+        labs(color = as.expression(eq))
+```
+
+As expected, increasing the proportion of historical sites increases the rate of change (slope) of the buffer size effects on the adjusted sample size.
+Using the same simulations, we computed the optimal buffer size for each of the proportion of historical sites ($\frac{N_{hist}}{N_{total}}$) so the adjusted sample size ($N_{adj}$) equals the difference between the initial sample size ($N_{base}$) and the number of historical sites ($N_{hist}$) (@fig-proplegacy-target).
+Interestingly, increasing the proportion of historical sites increases the optimal buffer size up to a point until it reaches the sample effort (specified to 2% for the figure).
+The optimal buffer size reduces as the proportion of historical sites increases for proportions greater than the specified sampling effort.
+
+```{r figPropvsNadj,echo=FALSE,message=FALSE,warning=FALSE,fig.width=6,fig.height=4}
+#| label: fig-proplegacy-target
+#| fig-cap: "Optimal buffer size in function of the proportion of historical sites to the total number of hexagons. Each dot is a replication of the simulated increase of proportion of historical sites. A small amount of noise around each dot was added for visualization purposes. Blue line is smooth estimation using Generalized additive model to demonstrate the exponential effect of the proportion of historical sites on the optimal buffer size."
+
+nbHexas_buffer |>
+    mutate(
+        buffer_size = buffer_size/1000,
+        N_adj = (nrow(hexas_sim) - nbHex_buffer) * sample_effort,
+        N_inital = nrow(hexas_sim) * sample_effort,
+        N_target = nrow(hexas_sim) * sample_effort - nbLegacy
+    ) |>
+    mutate(nbLegacy = nbLegacy/nrow(hexas_sim)) |>
+    group_by(rep, nbLegacy) |>
+    summarise(opt_bufferSize = buffer_size[which.min(abs(N_adj - N_target))]) |>
+    ggplot(aes(nbLegacy, opt_bufferSize)) +
+        geom_jitter(alpha = .2, size = .5) +
+        geom_smooth() +
+        theme_minimal() +
+        xlab(as.expression(eq)) + ylab('Optimal buffer size')
+
+```
+
+To illustrate the effect of different sampling efforts on the relationship between the proportion of historical sites and the optimal buffer size, we simulated sampling efforts ranging from 1 to 20%. (@fig-proplegacy-target-sampleeffort).
+
+```{r figPropvsNadj_sampleeffort,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=4}
+#| label: fig-proplegacy-target-sampleeffort
+#| fig-cap: "Optimal buffer size in function of the proportion of historical sites for different sampling efforts ranging from 1 to 20%. For clarity, we choose to omit the data points and illustrate only the smooth estimation using Generalized additive model."
+
+nbHexas_buffer |>
+    group_by(nbLegacy) |>
+    expand_grid(samp_eff = seq(0.01, 0.18, 0.01)) |>
+    mutate(
+        buffer_size = buffer_size/1000,
+        N_adj = (nrow(hexas_sim) - nbHex_buffer) * samp_eff,
+        N_inital = nrow(hexas_sim) * samp_eff,
+        N_target = nrow(hexas_sim) * samp_eff - nbLegacy
+    ) |>
+    mutate(nbLegacy = nbLegacy/nrow(hexas_sim)) |>
+    group_by(rep, nbLegacy, samp_eff) |>
+    summarise(opt_bufferSize = buffer_size[which.min(abs(N_adj - N_target))]) |>
+    ggplot(aes(nbLegacy, opt_bufferSize, group = samp_eff, color = samp_eff)) +
+#        geom_line() +
+        geom_smooth() +
+        theme_minimal() +
+        xlab(as.expression(eq)) + ylab('Optimal buffer size') + labs(color = 'Sample effort')
+```
+
+The fact that the optimal buffer size changes with the number of historical sites in a region may be related to buffer coverage overlapping between historical sites and the border effects where coverage does not have effect on sample size.
+As a result, the optimal buffer size may also depend on the size and shape of the sample grid.However, given that the shape and size of the ecoregions are not adjustable, we decided to not test for these variables.
+
+
+### Results
+
+```{r runGRTS_simulations,echo=FALSE,eval=FALSE}
+
+#/!\ VERY SLOW CODE (takes few hours to run) /!\
+
+# define paramater simulations
+##################################################
+
+N_rep <- 15
+
+# Ecoregions
+eco_sim = c(
+    '7', '28', '30', '31',
+    '46', '47', '48', '49',
+    '73', '77', '78', '86',
+    '72', '74', '75', '76',
+    '96', #'96N', '96S',
+    '99',
+    '100', #'100N', '100S',
+    '101', #'101N', '101S',
+    '102',
+    '103', #'103N', '103S',
+    '117',
+    '216',
+    '217'#, '217N', '217S'
+)
+
+# legacy proportion to ecoregion's sample size
+legacy_prop <- c(
+    seq(0.002, 0.02, 0.002),
+    seq(0.04, 0.12, 0.02)
+)
+
+# buffer size
+buffer_sizes <- seq(4000, 40000, 1000)
+
+# filter hexagons with at least 20% of habitats
+prop_na = 0.8
+
+hexas <- hexas |>
+        filter(propNA <= prop_na) %>%
+        filter(ecoregion %in% eco_sim) 
+
+# sample size
+sample_size <- hexas |>
+    st_drop_geometry() |>
+    group_by(ecoregion) |>
+    summarise(
+        nHex = n(),
+        nSample = nHex * sample_effort
+    ) |>
+    mutate(
+        nSample = ifelse(
+            nSample < 2, 2, nSample
+        )
+    ) |>
+    filter(nSample > 9) # keeping ecoregion that have at least 400 hexagons
+
+
+set.seed(0.0)
+
+# Prepare sample frame
+sampleFrame <- hexas %>%
+    mutate(    
+        eco_name = paste0('eco_', ecoregion), # to match design name
+        geometry = sf::st_geometry(sf::st_centroid(geometry))
+    )
+    
+# list to store all legacy proportions
+legacyProp_ls <- list()
+for(Prop in legacy_prop) {
+
+    # legacy proportion will define the sample size
+    # remember we are sampling spatially balanced legacy sites
+    Stratdsgn <- setNames(
+        round(sample_size$nSample * Prop, 0),
+        paste0('eco_', sample_size$ecoregion)
+    )
+    
+    # list to store all replications for the same legacy proportion
+    outRep_ls <- list()
+    for(Rep in 1:N_rep)
+    {
+        # run GRTS
+        out_sample <- spsurvey::grts(
+            sframe = sampleFrame,
+            n_base = Stratdsgn,
+            stratum_var = 'eco_name'
+        )
+
+        outRep_ls[[Rep]] <- out_sample$sites_base$ET_Index
+    }
+
+    legacyProp_ls[[as.character(Prop)]] <- outRep_ls
+}
+
+# Now let's calculated the adjusted sample size for different values of buffer size
+
+hexas_cen <- hexas |>
+    filter(ecoregion %in% sample_size$ecoregion) |>
+    st_centroid()
+
+# progress
+count = 1
+totalN = length(sample_size$ecoregion) * length(legacy_prop) * N_rep * length(buffer_sizes)
+
+# df to save outputs
+eco_nbHexas <- data.frame()
+
+for(eco in sample_size$ecoregion)
+{
+    hex_eco <- hexas |>
+        filter(ecoregion == eco)
+
+    hex_cen_eco <- hexas_cen |>
+        filter(ecoregion == eco)
+
+    for(Prop in legacy_prop)
+    {
+        for(Rep in 1:N_rep)
+        {
+            hex_sel <- hexas |>
+                filter(ET_Index %in% legacyProp_ls[[which(Prop == legacy_prop)]][[Rep]]) |>
+                filter(ecoregion == eco)
+            
+            for(bs in buffer_sizes)
+            {
+                hex_sel_bf <- hex_sel |>
+                    st_buffer(dist = bs)
+
+                nbHex <- hex_cen_eco |>
+                    st_intersects(hex_sel_bf, sparse = FALSE) |>
+                    apply(1, any) |>
+                    sum()
+                
+                eco_nbHexas <- rbind(
+                    eco_nbHexas,
+                    data.frame(
+                        ecoregion = eco,
+                        legacy_prop = Prop,
+                        rep = Rep,
+                        buffer_size = bs,
+                        nbHex_buffer = nbHex
+                    )
+                )
+                cat('   Progress: ', round(count/totalN * 100, 1), '%\r')
+                count = count + 1
+            }
+        }
+    }
+}
+
+saveRDS(
+    eco_nbHexas,
+    file.path('data', 'ecoregion_nbHexas_buffer.RDS')
+)
+```
+
+```{r load_GRTSsimulations,echo=FALSE,warning=FALSE,message=FALSE}
+eco_nbHexas <- readRDS(file.path('data', 'ecoregion_nbHexas_buffer.RDS'))
+
+# sample size
+sample_size <- hexas |>
+    st_drop_geometry() |>
+    group_by(ecoregion) |>
+    summarise(
+        nHex = n(),
+        nSample = nHex * sample_effort
+    ) |>
+    mutate(
+        nSample = ifelse(
+            nSample < 2, 2, nSample
+        )
+    ) |>
+    filter(nSample > 9) # keeping ecoregion that have at least 400 hexagons
+
+```
+
+Following the theoretical development, we performed the identical simulations using actual ecoregion boundaries rather than simulated grids.
+We simulated spatially balanced historical sites across the ecoregions with relative proportions to the total number of hexagons ranging from 0.2 to 12%.
+For each value of proportion, we calculated the adjusted sample size for different buffer sizes with radius ranging from 4 to 40 km.
+Ecoregions 131, 28, 30, 46, 48, 49, and 216 were excluded due to the very small size that would result in zero generated historical size for most of the simulation sets.
+
+The effect of buffer size and the proportion of historical sites on the adjusted sample size using the ecoregion boundaries were similar to those performed using a simulated grid (@fig-bufferSize_vs_Nadj).
+The effect of increasing the buffer size on the reduction of the adjusted sample size is non-linear, with the rate of change increasing as the number of historical sites rises.
+
+```{r figBufferVsNadjForEcoregion,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=7}
+#| label: fig-bufferSize_vs_Nadj
+#| fig-cap: "Adjusted sample size in function of buffer size for different proportion of historical sites compared to initial sample size. When buffer size and proportion of historical sites equals zero, adjusted sample size is equal to the initial sample size."
+
+eco_nbHexas |>
+    left_join(
+        sample_size
+    ) |>
+    mutate(
+        N_adj = (nHex - nbHex_buffer) * sample_effort
+    ) |>
+    group_by(ecoregion, buffer_size, legacy_prop) |>
+    summarise(N_adj = mean(N_adj)) |>
+    mutate(ecoregion = paste0('Ecoregion ', ecoregion)) |>
+    ggplot(aes(buffer_size/1000, N_adj, color = legacy_prop, group = legacy_prop)) +
+        geom_line() +
+        scale_color_viridis_c() +
+        facet_wrap(~ecoregion, scales = 'free_y') +
+        theme_minimal() +
+        xlab('Buffer size (Km)') +
+        ylab(parse(text = paste0('"Adjusted sample size"', ' ~ (N[adj])'))) +
+        labs(color = as.expression(eq)) +
+        theme(legend.position = 'top')
+```
+
+This non-linear relationship can be observed in the effect of the number of historical sites on the optimal buffer size when calculating the optimal buffer size. (@fig-propVsNadj_eco).
+The optimal buffer size increases with the number of historical sites up to a point where it decreases for most ecoregions as the proportion of historical sites increases.
+Only the ecoregion 131 show a slight decrease in optimal buffer size with the number of historical sites.
+
+```{r figPropvsNadj_ecoregion,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=7}
+#| label: fig-propVsNadj_eco
+#| fig-cap: "Optimal buffer size in function of the proportion of historical sites to the initial sample size. Each dot is a replication of the simulated increase of proportion of historical sites. Blue line is smooth estimation using Generalized additive model to demonstrate the exponential effect of the proportion of historical sites on the optimal buffer size."
+
+eco_nbHexas |>
+    left_join(
+        sample_size
+    ) |>
+    mutate(
+        N_base = nHex * sample_effort,
+        N_legacy = nHex * legacy_prop,
+        N_expect = N_base - N_legacy,
+        N_adj = (nHex - nbHex_buffer) * sample_effort
+    ) |>
+    group_by(ecoregion, legacy_prop, rep) |>
+    summarise(
+        opt_bufferSize = buffer_size[which.min(abs(N_expect - N_adj))]
+    ) |>
+    mutate(ecoregion = paste0('Ecoregion ', ecoregion)) |>
+    ggplot(aes(legacy_prop, opt_bufferSize/1000)) +
+        geom_point(alpha = .5, size = .5) +
+        geom_smooth(method = 'gam') +
+        facet_wrap(~ecoregion) +
+        theme_minimal() +
+        xlab(as.expression(eq)) +
+        ylab('Optimal buffer size (Km)') + 
+        scale_x_continuous(
+            labels = scales::number_format(accuracy = 0.01)
+        )
+```
+
+Across the simulations and replications, the distribution of optimal buffer size follows a bimodal distribution.(@fig-optbuffersize).
+
+```{r figOptBufferSizevsEco,echo=FALSE,message=FALSE,warning=FALSE,fig.width=6,fig.height=7}
+#| label: fig-optbuffersize
+#| fig-cap: "Distribution of optimal buffer size across all simulation variables and 15 replications for each ecoregion."
+
+eco_nbHexas |>
+    left_join(
+        sample_size
+    ) |>
+    mutate(
+        N_base = nHex * sample_effort,
+        N_legacy = nHex * legacy_prop,
+        N_expect = N_base - N_legacy,
+        N_adj = (nHex - nbHex_buffer) * sample_effort
+    ) |>
+    group_by(ecoregion, legacy_prop, rep) |>
+    summarise(
+        opt_bufferSize = buffer_size[which.min(abs(N_expect - N_adj))]
+    ) |>
+    group_by(ecoregion) |>
+    mutate(
+        opt_bsMean = mean(opt_bufferSize)
+    ) |>
+    ggplot(aes(
+            x = opt_bufferSize,
+            y = reorder(ecoregion, desc(opt_bsMean)),
+            fill = stat(x))
+        ) +
+        geom_density_ridges_gradient(scale = 3) +
+        scale_fill_viridis_c() +
+        theme_minimal() +
+        theme(legend.position = 'none') +
+        xlab('Optimal buffer size') +
+        ylab('Ecoregion')
+```
+
+
+### The case of ecoregions 99 and 217
+
+```{r calculateNblegacy_ecoregion,echo=FALSE,message=FALSE,warning=FALSE}
+legacy_points <- read_csv(file.path('..', 'data', 'legacySites.csv'), show_col_types = FALSE) |>
+    st_as_sf(
+        coords = c('longitude', 'latitude'),
+        crs = st_crs(4326)
+    ) |>
+    st_transform(st_crs(hexas))
+
+nbLegacy_hex = hexas |>
+    st_drop_geometry() |>
+    filter(ecoregion %in% c(99, 217)) |>
+    select(ecoregion, ET_Index) |>
+    bind_cols(
+        nbLegacy = hexas |>
+            filter(ecoregion %in% c(99, 217)) |>
+            st_contains(legacy_points, sparse = FALSE) |>
+            apply(1, sum)
+    )
+
+nbLegacy_summary <- nbLegacy_hex |>
+    group_by(ecoregion) |>
+    summarise(nLegacy = sum(nbLegacy > 0)) |>
+    left_join(
+        sample_size
+    ) |>
+    mutate(legacy_prop = nLegacy/nHex)
+
+
+best_buffer <- eco_nbHexas |>
+    as_tibble() |>
+    left_join(
+        nbLegacy_summary |>
+            mutate(real_legacyProp = legacy_prop) |>
+            select(ecoregion, real_legacyProp)
+    ) |>
+    filter(ecoregion %in% c(99, 217)) |>
+    group_by(ecoregion) |>
+    mutate(best_legacy_prop = legacy_prop[which.min(abs(legacy_prop - real_legacyProp))]) |>
+    filter(legacy_prop == best_legacy_prop) |>
+    left_join(
+        sample_size
+    ) |>
+    mutate(
+        N_base = nHex * sample_effort,
+        N_legacy = nHex * legacy_prop,
+        N_expect = N_base - N_legacy,
+        N_adj = (nHex - nbHex_buffer) * sample_effort
+    ) |>
+    group_by(ecoregion, rep) |>
+    summarise(
+        opt_bufferSize = buffer_size[which.min(abs(N_expect - N_adj))]
+    ) |>
+    group_by(ecoregion) |>
+    summarise(
+        opt_bsMean = mean(opt_bufferSize)
+    )
+
+# compute the adjusted sample size for the two ecoregions=
+legacy_buff_99 <- hexas |>
+    filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 99 & nbLegacy > 0)$ET_Index) |>
+    st_buffer(subset(best_buffer, ecoregion == 99)$opt_bsMean)
+
+nbHex_99 <- hexas |>
+    filter(ecoregion == 99) |>
+    st_centroid() |>
+    st_intersects(legacy_buff_99, sparse = FALSE) |>
+    apply(1, any) |>
+    sum()
+
+legacy_buff_217 <- hexas |>
+    filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 217 & nbLegacy > 0)$ET_Index) |>
+    st_buffer(subset(best_buffer, ecoregion == 217)$opt_bsMean)
+
+nbHex_217 <- hexas |>
+    filter(ecoregion == 217) |>
+    st_centroid() |>
+    st_intersects(legacy_buff_217, sparse = FALSE) |>
+    apply(1, any) |>
+    sum()
+
+nbLegacy_eco <- nbLegacy_summary |>
+    filter(ecoregion %in% c(99, 217)) |>
+    left_join(
+        data.frame(
+            ecoregion = c('99', '217'),
+            nHex_buffer = c(nbHex_99, nbHex_217)
+        )
+    ) |>
+    mutate(
+        nDiff = nHex - nHex_buffer,
+        N_adj = nDiff * sample_effort
+    )
+```
+
+We apply our approach to reduce the same size in function of the number and distribution of historical sites for two contrasting ecoregions.
+The ecoregions 99 and 217 have `r subset(nbLegacy_eco, ecoregion == 99)$nLegacy` (`r round(subset(nbLegacy_eco, ecoregion == 99)$legacy_prop * 100, 1)`%) and `r subset(nbLegacy_eco, ecoregion == 217)$nLegacy` (`r round(subset(nbLegacy_eco, ecoregion == 217)$legacy_prop * 100, 1)`%) hexagons classified as historical sites, respectively.
+While the number of historical sites outweighed the sampling effort (2%), the spatial distribution of these sites varied depending on the ecoregion.
+Spatial distribution of historical sites was balanced in ecoregion 99, but clustered in ecoregion 217.
+As a result, the adjusted sample size for these two ecoregions should also be different.
+
+The optimal buffer size in fuction of the proportion of historical sites for the ecoregions 99 and 217 was `r subset(best_buffer, ecoregion == 99)$opt_bsMean/1000` and `r subset(best_buffer, ecoregion == 217)$opt_bsMean/1000` Km, respectively.
+The adjusted sample size taking into account the distribution and number of historical sites was reduced from `r round(subset(nbLegacy_eco, ecoregion == 99)$nSample, 0)` to `r round(subset(nbLegacy_eco, ecoregion == 99)$N_adj, 0)` for ecoregion 99, and from `r round(subset(nbLegacy_eco, ecoregion == 217)$nSample, 0)` to `r round(subset(nbLegacy_eco, ecoregion == 217)$N_adj, 0)` for ecoregion 217 (@fig-ecosExample).
+
+
+```{r figEcosExample,echo=FALSE,message=FALSE,warning=FALSE,fig.width=7,fig.height=7}
+#| label: fig-ecosExample
+#| fig-cap: "Distribution of historical sites and their coverage according to the optimal buffer size specific for the ecoregion."
+
+hexas |>
+    filter(ecoregion %in% c(99, 217)) |>
+    st_union() |>
+    ggplot() +
+        geom_sf() +
+        geom_sf(
+            data = hexas |>
+                filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 99 & nbLegacy > 0)$ET_Index) |>
+                st_buffer(subset(best_buffer, ecoregion == 99)$opt_bsMean) |>
+                st_union(),
+            fill = 'red',
+            alpha = 0.4,
+            color = NA
+        ) +
+        geom_sf(
+            data = hexas |>
+                filter(ET_Index %in% subset(nbLegacy_hex, ecoregion == 217 & nbLegacy > 0)$ET_Index) |>
+                st_buffer(subset(best_buffer, ecoregion == 217)$opt_bsMean) |>
+                st_union(),
+            fill = 'red',
+            alpha = 0.4,
+            color = NA
+        ) +
+        geom_sf(
+            data = hexas |>
+                    filter(ET_Index %in% subset(nbLegacy_hex, nbLegacy > 0)$ET_Index),
+            fill = 'red',
+            color = NA
+        ) +
+        geom_textbox(
+            aes(x = -73.5, y = 52.2, label = "**Ecoregion 217**<br><span style='color:red'>Historical sites</span>: 96<br>Initial sample size: 56<br>Adjuted sample size: 22"),
+            width = .30
+        ) +
+        geom_textbox(
+            aes(x = -78.5, y = 49, label = "**Ecoregion 99**<br><span style='color:red'>Historical sites</span>: 579<br>Initial sample size: 72<br>Adjuted sample size: 3"),
+            width = .30
+        ) +
+        theme_minimal() +
+        coord_sf(crs = 4326) +
+        xlab('') + ylab('')
+```
+
+
+### Limitations
+
+In order to achieve an optimal design, additional simulations may be required to fine-tune the parameters.
+While we have accounted for spatial coverage in adjusting the sample size, this approach could be also extended to include habitat distribution in order to better account the effect of legacy sites in the sampling design.

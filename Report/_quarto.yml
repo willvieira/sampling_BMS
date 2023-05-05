@@ -16,20 +16,19 @@ book:
   chapters:
     - index.qmd
     - intro.qmd
-    - part: Spatial data layers
+    - studyArea.qmd
+    - part: Inclusion probability
       chapters:
-      - studyArea.qmd
       - habitat.qmd
       - cost.qmd
-    - part: Legacy sites
-      chapters:
       - legacy.qmd
-      - legacyMethod.qmd
-    - part: Sampling algorithm
+    - part: Sampling design
       chapters:
-      - sampleSize.qmd
       - PSU.qmd
       - SSU.qmd
+    - part: Appendices
+      chapters:
+      - runGRTSexample.qmd
     - references.qmd
 
 bibliography: references.bib
