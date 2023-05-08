@@ -1,5 +1,5 @@
 ---
-title: "A guide for the BMS sampling design with R"
+title: "A guide for BMS sampling design with R"
 format:
   html:
     theme: flatly
@@ -14,13 +14,13 @@ Eval=FALSE
 
 In this section, we will provide an overview and explanation of the code used for the final step of the BMS sampling design.
 This report is designed to be self-contained and provides all the necessary steps for processing the data layers in conjunction with the GRTS algorithm to perform the sampling.
-The complete procedure, including code for data preparation and analysis, can be found in the [GitHub repository](https://github.com/willvieira/sampling_BMS/).
+The complete procedure, including code for data preparation and analysis, is organized in sequential R scripts and can be found in the [GitHub repository](https://github.com/willvieira/sampling_BMS/). This specific report refers to the R script [`08_runGRTS.R`](https://github.com/willvieira/sampling_BMS/blob/main/08_runGRTS.R).
 
 ## Setup
 
 Bellow we list the packages used in the sampling process.
 Note that the code described in the report is only compatible with spsurvey R package versions v5.0 and above.
-For consistent results, we recommend loading the same environment that was used in this project, which is saved in the renv.lock file.
+For consistent results, we recommend loading the same environment that was used in this project, which is saved in the `renv.lock` file.
 The following steps can be used to load the same environment:
 
 ```r
@@ -31,7 +31,7 @@ renv::activate(project = "/path/to/project")
 ```
 
 The first line of code will check load (and install if necessary) the R pacakge `renv` to manage the version of the dependences.
-The `activate()` function will install all necessary packages with their respective version into a local container acceble only by this project.
+The `activate()` function will install all necessary packages with their respective version into a local container accessible only by this project.
 If you're not already in the path of the project, make sure to replace `/path/to/project` with the path to the directory where the project is stored.
 
 ```{r loadPackages,results='hide',message=FALSE,warning=FALSE,eval=Eval}
@@ -53,8 +53,10 @@ Here is the main section the user will need to interact.
 Below is a list of all the variables that can be used to customize the sampling process, each accompanied by detailed comments.
 
 ```{r parameters,eval=Eval}
-# Threshold to determine whether a hexagon is suitable for sampling is based on the proportion of NA pixels (non-natural habitat).
-# `0.8` means an hexagon has to have at least 20% of habitat pixels to be suitable for sampling
+# Threshold to determine whether a hexagon is suitable for sampling is based on
+# the proportion of NA pixels (non-natural habitat).
+# `0.8` means a hexagon has to have at least 20% of habitat pixels to be
+# suitable for sampling
 prop_na = 0.8
 
 # Sample effort in percentage
@@ -79,8 +81,9 @@ eco_sim = c(
 )
 
 # File path of the csv file used to store the legacy sites
-# Example: https://github.com/willvieira/sampling_BMS/blob/main/data/legacySites.csv
-# `lat` and `lon` arguments are used to define the character name of the columns in the csv
+# E.g. https://github.com/willvieira/sampling_BMS/blob/main/data/legacySites.csv
+# `lat` and `lon` arguments are used to define the character name of the
+# columns in the csv
 and columns to extract legacy sites
 legacyFile = file.path('..', 'data', 'legacySites.csv')
 lat = 'latitude'
@@ -90,11 +93,11 @@ lon = 'longitude'
 # legacy sites using the MBHdesign R package
 bufferSize_p = 10
 
-# Buffer size (in Km) to adjust sample size of an ecoregion in function of
+# Buffer size (in Km) to adjust the sample size of an ecoregion as a function of
 # the number and distribution of its legacy sites
-# The value provided can either be a single number that will be applied to all
-# ecoregions or a file path that contains the buffer size information for each individual ecoregion.
-# Example: https://github.com/willvieira/sampling_BMS/blob/main/data/bufferSize_N.csv
+# The value provided can either be a single number applied to all ecoregions or
+# a file path containing the buffer size information for each ecoregion.
+# E.g. https://github.com/willvieira/sampling_BMS/blob/main/data/bufferSize_N.csv
 bufferSize_N = file.path('..', 'data', 'bufferSize_N.csv')
 # If you want to assign the same buffer size (in Km) for all ecoregion:
 # bufferSize_N = 15
@@ -113,7 +116,7 @@ fileSuffix = 'V2023'
 
 ## Prepare layers for sampling
 
-The first step is to load the complete list of hexagons within the study area.
+The first step is loading the complete hexagons list within the study area.
 While loading, we keep only the hexagons for the ecoregions of interest (`eco_sim`) and remove the hexagons with too many NA habitats.
 We then compute the hexagon inclusion probability from the habitat and cost layers normalized for the study area.
 
@@ -127,9 +130,9 @@ hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS')) |>
     filter(p != 0)
 ```
 
-The second layer of information necessary to run the GRTS in the legacy sites.
-Bellow the code is writen to load the list of coordiante points from the legacy sites and create a data frame describing the count number of legacy sites per hexagon.
-This procedure scales the point data to the hexagon level, allowing us to modify the inclusion probability of the neighboring hexagons and adjut the ecoregion sample size.
+The legacy sites are the second layer of information needed to run the GRTS.
+Bellow the code is written to load the list of coordinate points from the legacy sites and create a data frame describing the count number of legacy sites per hexagon.
+This procedure scales the point data to the hexagon level, allowing us to modify the inclusion probability of the neighboring hexagons and adjust the ecoregion sample size.
 
 ```{r legacySites,warning=FALSE,message=FALSE,eval=Eval}
 # function to transform Latitude & longitude legacy site points in a table
@@ -179,11 +182,11 @@ hexas <- hexas |>
 ```
 
 
-## Adjust sample size and inclusion probability in function of legacy sites
+## Adjust sample size and inclusion probability as a function of legacy sites
 
 After merging the hexagons and legacy sites, the next step is to adjust the sample size and modify the inclusion probabilities.
-The sample size, defined in the number of hexagons, is defined in function of the size of ecoregion, the sample effort (`sample_effort`), and the number of legacy sites.
-The input `bufferSize_N` quantily the effect of the each legacy site in reducing the final sample size.
+The sample size, defined in the number of hexagons, is defined in function of the size of the ecoregion, the sampling effort (`sample_effort`), and the number of legacy sites.
+The input `bufferSize_N` quantify the effect of each legacy site in reducing the final sample size.
 The value provided can either be a single number that will be applied to all ecoregions or a file path that contains the buffer size information for each individual ecoregion.
 For more details on defining the buffer size to adjust the sample size, please refer to chapter @sec-legacy-sites.
 
@@ -192,19 +195,20 @@ For more details on defining the buffer size to adjust the sample size, please r
 # number of hexagons, number of legacy sites, bufferSize, and sample effort
 get_sampleSize <- function(eco, hx, bf_N, sample_e)
 {
-    # get the hexagons centroid for a ecoregion
+    # get the hexagons centroid for a specific ecoregion
     hexa_eco <- hx |>
         filter(ecoregion == eco) |>
         st_centroid()
 
     if(nrow(subset(bf_N, ecoregion == eco)) > 0) {
-        # create a buffer of size BufferSize_N around legacy sites
+        # create a buffer of size `BufferSize_N` around the legacy site centroid
         hexa_legacy_bf <- hexa_eco |>
             filter(nbLegacySites > 0) |>
             st_buffer(subset(bf_N, ecoregion == eco)$bufferSize * 1000) |>
             st_union()
 
-        # Compute number of hexagons in which centroid is inside legacy buffer
+        # Compute the number of hexagons from the ecoregion in which their
+        # centroid falls within the buffer around the legacy sites
         nbHexas_legacy <- hexa_eco |>
             st_intersects(hexa_legacy_bf) |>
             unlist() |>
@@ -213,24 +217,28 @@ get_sampleSize <- function(eco, hx, bf_N, sample_e)
         nbHexas_legacy = 0
     }
 
-    # Compute adjusted sample size
+    # Compute the adjusted sample size using only the total amount of hexagons
+    # that do not fall within the legacy buffer
     adj_sampleSize <- round((nrow(hexa_eco) - nbHexas_legacy) * sample_e, 0)
 
-    # Only if ecoregion is too small, assure to sample at least two hexagons for all ecoregions
+    # If the ecoregion is too small to accommodate 2 hexagons with the defined
+    # sampling effort, ensure to sample at least two hexagons.
     if((nrow(hexa_eco) * sample_e) < 2 & nbHexas_legacy < 1)
         adj_sampleSize = 2
 
     return(adj_sampleSize)
 }
 
-# Load buffer size information regardless of a single number of
-# a file path
+# Load buffer size information regardless of the `byfferSize_N` class
 if(is.character(bufferSize_N)) {
     if(file.exists(bufferSize_N)) {
         buffSizeN <- read_csv(bufferSize_N, show_col_types = FALSE) |>
             mutate(ecoregion = as.character(ecoregion))
     }else{
-        stop(paste0('File "', bufferSize_N, '" does not exist. Please check if the name is correct.'))
+        stop(
+            paste0('File "', bufferSize_N,
+            '" does not exist. Please check if the name is correct.')
+        )
     }
 }else if(is.numeric(bufferSize_N)){
     buffSizeN <- tibble(
@@ -238,10 +246,10 @@ if(is.character(bufferSize_N)) {
         bufferSize = bufferSize_N
     )
 }else{
-    stop('Type of `bufferSize_N` must be either a numeric or a character')
+    stop('The type of `bufferSize_N` must be either numeric or a character')
 }
 
-# Run the function to define sample size across the ecoregions
+# Run the function to define sample size for all selected ecoregions
 sampleSize <- map_dbl(
     setNames(eco_sim, paste0('eco_', eco_sim)),
     get_sampleSize,
@@ -255,7 +263,7 @@ sampleSize <- map_dbl(
 Stratdsgn  <- sampleSize[sampleSize > 0]
 
 # Because we are sampling an extra hexagon for each selected one,
-# make sure that ecoregion has at least 2 times more available
+# make sure that each ecoregion has at least 2 times more available
 # hexagons than sample N
 eco_to_remove <- hexas |>
     st_drop_geometry() |>
@@ -290,8 +298,8 @@ sampleFrame <- hexas |>
 )   
 ```
 
-The last step involves adjusting the inclusion probabilities for neighboring hexagons around legacy sites.
-To accomplish this, we used the MBHdesign R package and adjusted the inclusion probability based on the `bufferSize_p` parameter.
+The last step involves adjusting inclusion probabilities for neighboring hexagons around legacy sites.
+To do this, we used the `MBHdesign` R package and adjusted the inclusion probability based on the `bufferSize_p` parameter.
 
 ```{r adjInclProb,warning=FALSE,message=FALSE,eval=Eval}
 # Coordinates of all hexagons in matrix format for MBHdesign
@@ -313,13 +321,18 @@ sampleFrame$adj_p <- MBHdesign::alterInclProbs(
 ```
 
 
-## Primary Sampling Unit (PSU) sampling
+## Primary Sampling Unit (PSU)
 
-The PSU sampling 
+The `spsurvey` R package was used to implement the GRTS algorithm for sampling the PSUs of each ecoregion stratum.
+The sample size for each stratum, as defined in `Stratdsn`, is used to sample the hexagon points from the `sampleFrame` object.
+Note that the same sample size stratum is used for sampling the replacement (`n_over`) sites for each ecoregion stratum.
+Within each stratum, the sample selection is weighted based on the inclusion probability `adj_p`, which is derived from the habitat, cost, and legacy site layers.
+We replicate this sampling process `nb_rep` times, sum the total cost of sampling for the selected hexagons, and choose the replication with the lowest cost.
 
 ```{r runGRTS, warning=FALSE,message=FALSE,eval=Eval}
-# run GRTS
+# list to store the hexagons ID (ET_Index) for the main and the replacement
 grts_main <- grts_over <- list()
+# Run GRTS selection over nb_rep times
 for(Rep in 1:nb_rep)
 {
     out_sample <- spsurvey::grts(
@@ -345,20 +358,22 @@ cheapest_rep <- map_df(
 pull(totalCost) |>
 which.min()
 
+# Save selected main and replacement hexagons
 selected_main <- hexas |>
     filter(ET_Index %in% grts_main[[cheapest_rep]])
 selected_over <- hexas |>
     filter(ET_Index %in% grts_over[[cheapest_rep]])
 ```
 
-
-Neighbor sample section
-
-Select one of the 6 neighbor hexagons with the highest inclusion probability
-loop over ecoregions to make sure neighbours are from the same ecoregion
+Since the replacement hexagons are randomly selected in the stratum space, we also selected an extra layer of replacement hexagons that are obligatory neighbors of each main hexagon.
+For each selected main hexagon, we extract all neighboring hexagons and select the one with the highest inclusion probability.
+If a selected main hexagon has no available neighbor hexagon, we will select a random one over the ecoregion.
 
 ```{r neighbor, message=FALSE,warning=FALSE,eval=Eval}
+# object to store extra layer of selected hexagons
 selected_extra <- hexas[0, ]
+
+# loop over ecoregions to make sure neighbours are from the same ecoregion
 for(eco in parse_number(names(Stratdsgn)))
 {
     hexas_eco <- subset(hexas, ecoregion == eco)
@@ -402,14 +417,12 @@ for(eco in parse_number(names(Stratdsgn)))
 }
 ```
 
+## Secondary Sampling Unit (SSU)
 
-## SSU sampling
+For each of the selected PSU hexagons (`main`, `over`, and `extra`), we generate a grid of SSU points equally spaced with a distance defined by `ssu_dist`.
+The following function to generate SSUs is from the Ontario's sampling approach ([code source](https://github.com/dhope/BASSr)).
 
-```{r selectSSU,message=FALSE,warning=FALSE,eval=Eval}
-land_ca <- raster('data/landcover_ca_30m.tif')
-prev_all <- readRDS(file.path('..', 'data', 'prev_all.RDS'))
-
-# function to generate SSU points (from: https://github.com/dhope/BASSr)
+```{r funGridSSU,message=FALSE,warning=FALSE,eval=Eval}
 genSSU <- function(h, spacing)
 {
     ch <- as_tibble(st_coordinates(h))
@@ -418,28 +431,28 @@ genSSU <- function(h, spacing)
     gridsize <- 2*floor(abs(top_point$Y-bottom_point$Y)/spacing)+3
     rowAngle <- tanh((top_point$X-bottom_point$X)/(top_point$Y-bottom_point$Y))
 
-    cent <- st_centroid(h) |>
-        bind_cols(as_tibble(st_coordinates(.))) |>
-        st_drop_geometry |>
+    cent <- st_centroid(h) %>%
+        bind_cols(as_tibble(st_coordinates(.))) %>%
+        st_drop_geometry %>%
         dplyr::select(ET_Index, X, Y)
 
     genRow <- function(cX, cY, sp,...){
-        tibble(rowid = seq(-gridsize,gridsize)) |>
+        tibble(rowid = seq(-gridsize,gridsize)) %>%
         mutate(X = sin(60*pi/180+rowAngle) *sp*rowid + {{cX}},
                 Y = cos(60*pi/180+rowAngle) *sp*rowid  + {{cY}})
     }
 
-    centroids <- tibble(crowid=seq(-gridsize,gridsize)) |>
+    centroids <- tibble(crowid=seq(-gridsize,gridsize)) %>%
         mutate(cY = cos(rowAngle) *spacing*crowid + cent$Y,
             #spacing/2*crowid + cent$Y,
-            cX =  sin(rowAngle) *spacing*crowid + cent$X) |>
-        #cent$X + crowid* sqrt(spacing**2-(spacing/2)**2)) |>
+            cX =  sin(rowAngle) *spacing*crowid + cent$X) %>%
+        #cent$X + crowid* sqrt(spacing**2-(spacing/2)**2)) %>%
         rowwise() |>
-        mutate(row = list(genRow(cX = cX,cY = cY,sp = spacing))) |>
+        mutate(row = list(genRow(cX = cX,cY = cY,sp = spacing))) %>%
         unnest(row) |>
-        dplyr::select(X,Y) |>
-        st_as_sf(coords = c("X", "Y"), crs = st_crs(h)) |>
-        st_filter(h) |>
+        dplyr::select(X,Y) %>%
+        st_as_sf(coords = c("X", "Y"), crs = st_crs(h)) %>%
+        st_filter(h) %>%
         mutate(
             ET_Index = h$ET_Index,
             ecoregion = h$ecoregion,
@@ -447,9 +460,13 @@ genSSU <- function(h, spacing)
         )
     return(centroids)
 }
+```
 
+The following step involves defining a function to sample the SSUs within each selected PSU hexagon.
+SSU sampling is done sequentially, so for each selected SSU, the first and second layers of neighbour points (6 and 12, respectively) are made unavailable for sampling the next SSU.
+We repeat this process until we reach the total sampling size (`ssu_N`) or when there are no more available SSUs left to sample.
 
-# function to sample SSU
+```{r funSampleSSU,message=FALSE,warning=FALSE,eval=Eval}
 sample_SSU <- function(ssuid, prob, geom, filtered, ssuDist, N)
 {
     # check if N is even
@@ -459,7 +476,7 @@ sample_SSU <- function(ssuid, prob, geom, filtered, ssuDist, N)
     filtered_1 <- filtered
     out <- rep(0, length(filtered))
 
-    # loop to sample 4
+    # loop to sample N SSUs
     count = 1
     while(
         count <= N &
@@ -497,9 +514,25 @@ sample_SSU <- function(ssuid, prob, geom, filtered, ssuDist, N)
     }
     return( out )
 }
+```
 
-# Sample SSU points for each of the selected hexagon layers
-# main, over, and extra
+With these two functions, we can loop over the `main`, `over`, and `extra` selected hexagons to create and sample SSU points.
+First, we create the SSU points for all selected hexagons.
+Then, we generate a buffer around each SSU point with a distance of `ssu_dist/2`.
+We use the habitat pixels within each buffer to calculate the inclusion probability and the proportion of NA pixels.
+To save computation time, we compute and store the six neighbour points around each SSU point.
+Before sampling the SSU points, we classify each point as available or not following these rules:
+- it must have 6 neighbours (less than that means it's a border SSU)
+- it must have at least 1 - `prop_na` of non-empty pixels
+- 4 out of 6 neighbours must also meet these rules
+
+In the final step, we assign a specific code to each selected SSU point and its neighbors, following the `A_B` pattern, where `A` represents the SSU sample ID (ranging from 1 to `ssu_N`), and `B` represents the neighbor ID (ranging from 0 to 6). Here, 0 represents the focal point, and 1 to 6 represent the six neighbors, starting from the top point and moving clockwise.
+
+```{r funGridSSU,message=FALSE,warning=FALSE,eval=Eval}
+# Habitat shapefile to calculate inclusion probability
+land_ca <- raster(file.path('..', 'data', 'landcover_ca_30m.tif'))
+# Distribution of habitat types per ecoregion
+prev_all <- readRDS(file.path('..', 'data', 'prev_all.RDS'))
 
 for(lyr in c('main', 'over', 'extra'))
 {
@@ -537,7 +570,7 @@ for(lyr in c('main', 'over', 'extra'))
             )
 
     # merge with inclusion probability
-    # and calculate inclusion probbaility for each NON empty polygon
+    # and calculate inclusion probability for each NON empty polygon
     SSUs$incl_prob <- unlist(
             lapply(
                 count_hab,
@@ -650,8 +683,10 @@ for(lyr in c('main', 'over', 'extra'))
 ## Export the sample PSU and SSU in shapefiles
 
 The purpose of this final section is to export all PSU and SSU points in a shapefile format.
-The format was chosen to facilitate post-processing, but it can be easily modified to suit other user cases.
-The initial code chunk saves all PSU and SSU sampled points into a single file, whereas the second code chunk saves the same sampled points but separated by ecoregion.
+The format was chosen to facilitate post-processing, but it can be modified to fit different needs.
+The first code chunk saves all PSU and SSU points into a single file, while the second code chunk separates the same sampled points by ecoregion.
+
+#### Grouped ecoregions
 
 ```{r,eval=Eval, message=FALSE, warning=FALSE}
 savePath = file.path(outputFolder, 'allEcoregion')
@@ -752,6 +787,8 @@ for(lyr in c('main', 'over', 'extra'))
         )
 }
 ```
+
+#### Splited ecoregions
 
 ```{r,eval=Eval, message=FALSE, warning=FALSE}
 for(eco in eco_sim)
