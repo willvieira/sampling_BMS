@@ -145,7 +145,7 @@ The number of hexagons, available hexagones, and sample size is described in @tb
 
 ```{r tableSampleSize,echo=FALSE,message=FALSE,warning=FALSE}
 #| label: tbl-sampleSize
-#| tbl-cap: Distribution of total hexagons, hexagons with at least 20% of natural habitats, and sample size across the ecoregions.
+#| tbl-cap: Distribution of total hexagons, hexagons with at least 20% of natural habitats, and sample size (2%) across the ecoregions.
 
 hexas |>
     st_drop_geometry() |>
@@ -166,13 +166,13 @@ hexas |>
             select(ecoregion, REGION_NAM)
     ) |>
     mutate(
-        Code = ecoregion,
-        Name = REGION_NAM,
+        `Ecoregion code` = ecoregion,
+        `Ecoregion name` = REGION_NAM,
         `Total Hexagons` = nbHex_fil,
         `Available Hexagons` = nbHex_fil,
         `Sample size` = sampleSize
     ) |>
-    select(Code, Name, `Total Hexagons`, `Available Hexagons`, `Sample size`) |>
+    select(`Ecoregion code`, `Ecoregion name`, `Total Hexagons`, `Available Hexagons`, `Sample size`) |>
     kbl(format = 'markdown', align = 'c')
 ```
 
@@ -182,12 +182,11 @@ For each PSU hexagon, we created a grid of Secondary Sampling Units (SSUs).
 The SSU represents the ultimate sampling locations to be utilized in the field.
 Instead of using the proposed 300-meter distance from the BOSS design, we followed the approach used in the Ontario regionalization design, where each SSU was separated by 294 meters.
 We made this small reduction in distance to ensure that the same number of SSUs were present across all PSU hexagons.
-The distribution of SSUs within an hexagon is shown in Figure1.
 @fig-PSUSSU displays the distribution of Secondary Sampling Units (SSUs) within a hexagon.
 
 ```{r ssuExp,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=8}
 #| label: fig-PSUSSU
-#| fig-cap: "Distribution of Seconday Sampling Units (SSUs) within an Primary Sampling Unit (PSU) hexagon."
+#| fig-cap: "Distribution of Secondary Sampling Units (SSUs) spaced 294 meters apart within an Primary Sampling Unit (PSU) hexagon."
 
 # function to generate SSU points (from: https://github.com/dhope/BASSr)
 genSSU <- function(h, spacing)

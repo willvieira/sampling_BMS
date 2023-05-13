@@ -2,8 +2,6 @@
 title: "A guide for BMS sampling design with R"
 format:
   html:
-    theme: flatly
-    toc: true
     code-fold: show
     code-tools: true
 ---
@@ -23,7 +21,7 @@ Note that the code described in the report is only compatible with spsurvey R pa
 For consistent results, we recommend loading the same environment that was used in this project, which is saved in the `renv.lock` file.
 The following steps can be used to load the same environment:
 
-```r
+```{r load enviroment,eval=Eval}
 # install `renv` package if necessary
 if (!require(renv)) install.packages('renv')
 # Restore the project environment
@@ -188,9 +186,9 @@ After merging the hexagons and legacy sites, the next step is to adjust the samp
 The sample size, defined in the number of hexagons, is defined in function of the size of the ecoregion, the sampling effort (`sample_effort`), and the number of legacy sites.
 The input `bufferSize_N` quantify the effect of each legacy site in reducing the final sample size.
 The value provided can either be a single number that will be applied to all ecoregions or a file path that contains the buffer size information for each individual ecoregion.
-For more details on defining the buffer size to adjust the sample size, please refer to chapter @sec-legacy-sites.
+For more details on defining the buffer size to adjust the sample size, please refer to @sec-legacy-sites.
 
-```{r sampleSize,warning=FALSE,message=FALSE,eval=Eval}
+```{r sampleSizeF,warning=FALSE,message=FALSE,eval=Eval}
 # function to get sample size for a specific ecoregion given:
 # number of hexagons, number of legacy sites, bufferSize, and sample effort
 get_sampleSize <- function(eco, hx, bf_N, sample_e)
@@ -228,7 +226,9 @@ get_sampleSize <- function(eco, hx, bf_N, sample_e)
 
     return(adj_sampleSize)
 }
+```
 
+```{r loadBuffFile,warning=FALSE,message=FALSE,eval=Eval}
 # Load buffer size information regardless of the `byfferSize_N` class
 if(is.character(bufferSize_N)) {
     if(file.exists(bufferSize_N)) {
@@ -248,7 +248,9 @@ if(is.character(bufferSize_N)) {
 }else{
     stop('The type of `bufferSize_N` must be either numeric or a character')
 }
+```
 
+```{r RunsampleSizeF,warning=FALSE,message=FALSE,eval=Eval}
 # Run the function to define sample size for all selected ecoregions
 sampleSize <- map_dbl(
     setNames(eco_sim, paste0('eco_', eco_sim)),
@@ -522,11 +524,13 @@ Then, we generate a buffer around each SSU point with a distance of `ssu_dist/2`
 We use the habitat pixels within each buffer to calculate the inclusion probability and the proportion of NA pixels.
 To save computation time, we compute and store the six neighbour points around each SSU point.
 Before sampling the SSU points, we classify each point as available or not following these rules:
+
 - it must have 6 neighbours (less than that means it's a border SSU)
 - it must have at least 1 - `prop_na` of non-empty pixels
 - 4 out of 6 neighbours must also meet these rules
 
 In the final step, we assign a specific code to each selected SSU point and its neighbors, following the `A_B` pattern, where `A` represents the SSU sample ID (ranging from 1 to `ssu_N`), and `B` represents the neighbor ID (ranging from 0 to 6). Here, 0 represents the focal point, and 1 to 6 represent the six neighbors, starting from the top point and moving clockwise.
+please refer to @ssu-sample for more details.
 
 ```{r SampleSSU,message=FALSE,warning=FALSE,eval=Eval}
 # Habitat shapefile to calculate inclusion probability
@@ -680,7 +684,7 @@ for(lyr in c('main', 'over', 'extra'))
 }
 ```
 
-## Export the sample PSU and SSU in shapefiles
+## Export PSU and SSU samples in shapefiles
 
 The purpose of this final section is to export all PSU and SSU points in a shapefile format.
 The format was chosen to facilitate post-processing, but it can be modified to fit different needs.

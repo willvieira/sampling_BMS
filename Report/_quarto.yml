@@ -17,7 +17,7 @@ book:
     - index.qmd
     - intro.qmd
     - studyArea.qmd
-    - part: Inclusion probability
+    - part: PSU inclusion probability
       chapters:
       - habitat.qmd
       - cost.qmd
