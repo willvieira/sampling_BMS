@@ -95,7 +95,7 @@ bufferSize_p = 10
 # the number and distribution of its legacy sites
 # The value provided can either be a single number applied to all ecoregions or
 # a file path containing the buffer size information for each ecoregion.
-# E.g. https://github.com/willvieira/sampling_BMS/blob/main/data/bufferSize_N.csv
+# E.g.https://github.com/willvieira/sampling_BMS/blob/main/data/bufferSize_N.csv
 bufferSize_N = file.path('..', 'data', 'bufferSize_N.csv')
 # If you want to assign the same buffer size (in Km) for all ecoregion:
 # bufferSize_N = 15
@@ -409,7 +409,9 @@ for(eco in parse_number(names(Stratdsgn)))
         nonSelected_hexas <- setdiff(hexas_eco$ET_Index, hexas_sel_eco$ET_Index)
         
         # sample from non selected hexas
-        best_p[which(toCheck == 0)] <- sample(nonSelected_hexas, sum(toCheck == 0))
+        best_p[which(toCheck == 0)] <- sample(
+            nonSelected_hexas, sum(toCheck == 0)
+        )
     }
     
     selected_extra <- rbind(
@@ -580,7 +582,15 @@ for(lyr in c('main', 'over', 'extra'))
                 count_hab,
                 function(x) {
                     if(is.data.frame(x)) {
-                        mg_df <- merge(x, subset(prev_all, ID_ecoregion == x$ecoregion[1]), by.x = "Var1", by.y = "code" , all.x = TRUE)
+                        mg_df <- merge(
+                            x,
+                            subset(
+                                prev_all, ID_ecoregion == x$ecoregion[1]
+                            ),
+                            by.x = "Var1",
+                            by.y = "code",
+                            all.x = TRUE
+                        )
                         sum(mg_df$Freq * mg_df$incl_prob)
                     }else{
                         NA
@@ -634,7 +644,9 @@ for(lyr in c('main', 'over', 'extra'))
                 ssuID,
                 .f = function(x, pNA, ETI)
                     sum(
-                        pNA[setdiff(which(neighbour_ls[[ETI]][, x]), x)] <= prop_na
+                        pNA[
+                            setdiff(which(neighbour_ls[[ETI]][, x]), x)
+                        ] <= prop_na
                     ),
                 pNA = propNA,
                 ETI = unique(ET_Index)
@@ -652,7 +664,8 @@ for(lyr in c('main', 'over', 'extra'))
 
     # Prepare selected SSU and their specific neighbours with code like `A_B`
     # `A` is for the SSU sample ID (1:`ssu_N`)
-    # `B` is for the neighbour ID (0:6 where zero is the focal point, and 1:6 are the 6 neighbours starting from the top point moving clockwise)
+    # `B` is for the neighbour ID (0:6 where zero is the focal point, and
+    # 1:6 are the 6 neighbours starting from the top point moving clockwise)
     SSU_lyr <- subset(SSU_selected, sampled > 0)
     SSU_lyr_ls <- list()
 
@@ -661,7 +674,11 @@ for(lyr in c('main', 'over', 'extra'))
         # get neighbours for specific row
         nei_hx <- SSU_selected |> 
             filter(ET_Index == SSU_lyr$ET_Index[i]) |> 
-            filter(ssuID %in% which(neighbour_ls[[SSU_lyr$ET_Index[i]]][, SSU_lyr$ssuID[i]]))
+            filter(
+                ssuID %in% which(
+                    neighbour_ls[[SSU_lyr$ET_Index[i]]][, SSU_lyr$ssuID[i]]
+                )
+            )
 
         # code A 
         nei_hx$codeA <- SSU_lyr$sampled[i]
@@ -696,7 +713,10 @@ The first code chunk saves all PSU and SSU points into a single file, while the 
 savePath = file.path(outputFolder, 'allEcoregion')
 dir.create(savePath, recursive = TRUE)
 
-varsToRm = c('OBJECTID', 'Join_Count', 'TARGET_FID', 'ET_ID', 'ET_ID_Old', 'ET_IDX_Old')
+varsToRm = c(
+    'OBJECTID', 'Join_Count', 'TARGET_FID',
+    'ET_ID', 'ET_ID_Old', 'ET_IDX_Old'
+)
 
 hexas_save <- hexas |>
     select(-all_of(varsToRm))
@@ -798,7 +818,11 @@ for(lyr in c('main', 'over', 'extra'))
 for(eco in eco_sim)
 {
     # create folder
-    eco_path <- file.path(outputFolder, 'byEcoregion', paste0('ecoregion_', eco))
+    eco_path <- file.path(
+        outputFolder,
+        'byEcoregion',
+        paste0('ecoregion_', eco)
+    )
     dir.create(eco_path, recursive = TRUE)
 
     # PSU
@@ -815,11 +839,22 @@ for(eco in eco_sim)
     for(lyr in c('main', 'over', 'extra'))
     {
         hexas_save |>
-            filter(ET_Index %in% subset(get(paste0('selected_', lyr)), ecoregion == eco)$ET_Index) |>
+            filter(
+                ET_Index %in% subset(
+                    get(paste0('selected_', lyr)),
+                    ecoregion == eco
+                )$ET_Index
+            ) |>
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('PSU-SOBQ_eco', eco, '_', lyr, '-', fileSuffix, '.shp')
+                    paste0(
+                        'PSU-SOBQ_eco',
+                        eco, '_',
+                        lyr, '-',
+                        fileSuffix,
+                        '.shp'
+                    )
                 )
             )
     }
@@ -848,7 +883,14 @@ for(eco in eco_sim)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('SSU-SOBQ_eco', eco, '_ALL_', lyr, '-', fileSuffix, '.shp')
+                    paste0(
+                        'SSU-SOBQ_eco',
+                        eco,
+                        '_ALL_',
+                        lyr, '-',
+                        fileSuffix,
+                        '.shp'
+                    )
                 )
             )
     }
@@ -874,7 +916,14 @@ for(eco in eco_sim)
             write_sf(
                 file.path(
                     eco_path,
-                    paste0('SSU-SOBQ_eco', eco, '_selected_', lyr, '-', fileSuffix, '.shp')
+                    paste0(
+                        'SSU-SOBQ_eco',
+                        eco,
+                        '_selected_',
+                        lyr, '-',
+                        fileSuffix,
+                        '.shp'
+                    )
                 )
             )
     }
