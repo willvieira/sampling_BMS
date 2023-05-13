@@ -1,4 +1,4 @@
-# Cost information
+# Cost information {#sec-cost-info}
 
 In this section we define our approach to estimate the average access cost for each hexagon.
 We begin by describing the information layers used to define transport methods.

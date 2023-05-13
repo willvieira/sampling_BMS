@@ -1,4 +1,4 @@
-# Primary sampling unity
+# Primary sampling unity {#sec-psu}
 
 - The stratified selection of hexagons (PSUs) is performed using the GRTS algorithm.
 

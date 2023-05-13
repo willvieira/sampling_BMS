@@ -1,4 +1,4 @@
-# Introduction
+# Introduction {#sec-intro}
 
 This project is part of a nationwide effort to monitor the status of birds in the underrepresented boreal region.
 In this report we describe the Quebec adaptation of the Boreal Optimal Sampling Strategy (BOSS).

@@ -530,7 +530,7 @@ Before sampling the SSU points, we classify each point as available or not follo
 - 4 out of 6 neighbours must also meet these rules
 
 In the final step, we assign a specific code to each selected SSU point and its neighbors, following the `A_B` pattern, where `A` represents the SSU sample ID (ranging from 1 to `ssu_N`), and `B` represents the neighbor ID (ranging from 0 to 6). Here, 0 represents the focal point, and 1 to 6 represent the six neighbors, starting from the top point and moving clockwise.
-please refer to @ssu-sample for more details.
+please refer to @sec-ssu for more details.
 
 ```{r SampleSSU,message=FALSE,warning=FALSE,eval=Eval}
 # Habitat shapefile to calculate inclusion probability

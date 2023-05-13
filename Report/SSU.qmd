@@ -1,4 +1,4 @@
-# Secondary sampling unity
+# Secondary sampling unity {#sec-ssu}
 
 - For each selected hexagon, a grid of small hexagons spaced of 294 meters are create to perform the secondary sampling (SSU).
 - For each SSU hexagon within the SSU, habitat pixels are extract to compute a new layer of habitat inclusion probability following the same approach used for the PSU.

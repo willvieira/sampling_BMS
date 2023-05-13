@@ -1,4 +1,4 @@
-# Sampling frame
+# Sampling frame {#sec-sampling-frame}
 
 ```{r loadAreaEcoz,echo=FALSE,message=FALSE,warning=FALSE}
 suppressPackageStartupMessages(library(sf))

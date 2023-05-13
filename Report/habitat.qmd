@@ -1,4 +1,4 @@
-# Habitat information
+# Habitat information {#sec-habitat-info}
 
 ## Land cover
 
