@@ -1,0 +1,124 @@
+# Ecoregion summary: legacy sites {#sec-ecoSumm-legacy}
+
+```{r setup,echo=TRUE,results='hide',warning=FALSE,message=FALSE,echo=FALSE}
+library(tidyverse)
+library(viridis)
+library(sf)
+
+eco_sim = c(
+    '7', '28', '30', '31',
+    '46', '47', '48', '49',
+    '73', '77', '78', '86',
+    '72', '74', '75', '76',
+    '96', '99', '100', '101',
+    '102', '103', '117', '217'
+)
+
+hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS')) |>
+  filter(ecoregion %in% eco_sim)
+```
+
+
+```{r loadLegacay,echo=FALSE,eval=TRUE,fig.width=8,fig.height=6}
+# transform hexagons projection to the same of the legacy points
+hx <- hexas |>
+    st_transform(4326)
+
+# read legacy csv file
+lg <- read_csv(
+    file.path('..', 'data', 'legacySites.csv'),
+    show_col_types = FALSE
+  ) |>
+  st_as_sf(
+      coords = c('longitude', 'latitude'),
+      crs = st_crs(hx)
+  )
+
+# intersect legacy points with hexagon polygons
+nbLegacy <- hx |>
+    st_contains(lg, sparse = FALSE) |>
+    apply(1, sum)
+
+# merge to hexas attribute tables
+hexas$legacySites <- nbLegacy
+
+# load legacy buffer
+buffer_size <- read_csv(
+  file.path('..', 'data', 'bufferSize_N.csv'),
+  show_col_types = FALSE
+)
+```
+
+
+```{r print,echo=FALSE,message=FALSE,warning=FALSE,eval=TRUE,fig.width=8,fig.height=6}
+ecos <- hexas |>
+  st_drop_geometry() |>
+  group_by(ecoregion) |>
+  summarise(n = sum(legacySites)) |>
+  filter(n > 0) |>
+  pull(ecoregion) |>
+  parse_number() |>
+  unique()
+
+for(eco in ecos)
+{
+  eco_layer <- hexas |>
+    filter(ecoregion == eco) |>
+    st_union()
+
+  hexas_eco <- hexas |>
+    filter(ecoregion == eco)
+
+  hexas_lg <- hexas_eco |>
+    filter(legacySites > 0)
+
+  # plot  histogram
+  p_hist <- hexas_eco |>
+    filter(legacySites > 0) |>
+    ggplot(aes(legacySites, fill = ..x..)) +
+      geom_histogram() +
+      xlab('Number of legacy sites within an hexagon') +
+      ylab('') +
+      theme_minimal() +
+      scale_fill_viridis() +
+      theme(legend.position = 'bottom') +
+      labs(
+        title = paste0('Ecoregion ', eco),
+        fill = '# legacy sites')
+
+  p_ecoBuffer <- eco_layer |>
+    ggplot() +
+      geom_sf() +
+      geom_sf(
+        data = hexas_lg |>
+          st_buffer(
+            dist = subset(buffer_size, ecoregion == eco)$bufferSize * 1000
+          ) |>
+          st_union(),
+        fill = 'red',
+        alpha = 0.5,
+        color = 'transparent'
+      ) +
+      geom_sf(
+        data = hexas_lg |>
+          st_buffer(dist = 10000) |>
+          st_union(),
+        fill = 'red',
+        alpha = 0.3,
+        color = 'transparent'
+      ) +
+      geom_sf(
+        data = hexas_lg,
+        aes(fill = legacySites),
+        color = 'transparent'
+      ) +
+      coord_sf(crs = 4326) +
+      theme_minimal() +
+      theme(legend.position = 'none') +
+      xlab('') + ylab('') +
+      scale_fill_viridis()
+
+  print(p_hist)
+  print(p_ecoBuffer)
+}
+```
