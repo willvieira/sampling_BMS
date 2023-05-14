@@ -4,7 +4,6 @@
 library(tidyverse)
 library(viridis)
 library(sf)
-library(patchwork)
 
 hexas <- readRDS(file.path('data', 'hexa_complete.RDS'))
 ```
