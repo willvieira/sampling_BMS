@@ -29,6 +29,8 @@ book:
     - part: Appendices
       chapters:
       - runGRTSexample.qmd
+      - ecosumm_habitat.qmd
+      - ecosumm_cost.qmd
     - references.qmd
 
 bibliography: references.bib
