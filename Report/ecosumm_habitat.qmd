@@ -1,0 +1,125 @@
+# Ecoregion summary: habitat {#sec-ecoSumm-habitat}
+
+```{r setup,echo=TRUE,results='hide',warning=FALSE,message=FALSE,echo=FALSE}
+library(tidyverse)
+library(viridis)
+library(sf)
+library(patchwork)
+
+hexas <- readRDS(file.path('data', 'hexa_complete.RDS'))
+```
+
+```{r habitatColor,warning=FALSE,message=FALSE,echo=FALSE,eval=TRUE}
+habitat_colors <- c(
+  land_1 = rgb(0, 61, 0, maxColorValue = 255),
+  land_2 = rgb(148, 156, 112, maxColorValue = 255),
+  land_5 = rgb(20, 140, 61, maxColorValue = 255),
+  land_6 = rgb(92, 117, 43, maxColorValue = 255),
+  land_8 = rgb(179, 138, 51, maxColorValue = 255),
+  land_10 = rgb(225, 207, 138, maxColorValue = 255),
+  land_11 = rgb(156, 117, 84, maxColorValue = 255),
+  land_12 = rgb(186, 212, 143, maxColorValue = 255),
+  land_13 = rgb(64, 138, 112, maxColorValue = 255),
+  land_14 = rgb(107, 163, 138, maxColorValue = 255),
+  land_16 = rgb(168, 171, 174, maxColorValue = 255),
+  land_21 = '#03045e',
+  land_22 = '#023e8a',
+  land_23 = '#0077b6',
+  land_24 = '#0096c7',
+  land_25 = '#00b4d8',
+  land_26 = '#48cae4',
+  land_27 = '#90e0ef',
+  land_28 = '#ade8f4',
+  land_29 = '#caf0f8',
+  land_30 = '#E6FFFF'
+)
+```
+
+
+
+```{r printPlotFunc,echo=FALSE,eval=TRUE,fig.width=8,fig.height=6}
+ecos <- hexas |>
+  pull(ecoregion) |>
+  parse_number() |>
+  unique()
+
+for(eco in ecos)
+{
+  hexas_eco <- hexas |>
+    filter(ecoregion == eco)
+
+  # plot habitats
+  p_hab <- hexas_eco |>
+        st_drop_geometry() |>
+        select(ET_Index, hab_prob, contains('land_ca')) |>
+        filter(!is.na(hab_prob)) |>
+        pivot_longer(cols = contains('land_ca')) |>
+        mutate(
+            name = str_replace(
+                pattern = 'ca_',
+                replacement = '',
+                name
+            ),
+            incl_prob_class = cut(
+              hab_prob,
+              c(
+                min(hab_prob),
+                quantile(hab_prob, 0.8),
+                quantile(hab_prob, 0.95),
+                max(hab_prob)
+              ),
+              include.lowest = TRUE,
+              labels = FALSE
+            )
+        ) |>
+        group_by(ET_Index) |>
+        expand_grid(sim = 1:2) |>
+        ungroup() |>
+        mutate(
+          incl_prob_class = ifelse(sim == 2, 'all', incl_prob_class)
+        ) |>
+        filter(incl_prob_class != 1) |>
+        mutate(
+          incl_prob_class = recode_factor(
+            incl_prob_class,
+            `all` = 'All hexagons',
+            `2` = 'Hexagons with 0.85% < p < 0.95%',
+            `3` = 'Hexagons with p > 0.95%'
+          )
+        ) |>
+        ggplot(aes(incl_prob_class, y = value, fill = name)) +
+            geom_col(position = 'fill') +
+            scale_y_continuous(labels = scales::percent) +
+            scale_fill_manual(values = habitat_colors) +
+            theme_minimal() +
+            ylab('Distribution of habitat types across hexagons') +
+            xlab('') +
+            labs(
+              title = paste0('Ecoregion ', eco)
+            ) +
+            theme_minimal()
+
+  # # plot p histogram
+  # p_hist <- hexas_eco |>
+  #   filter(hab_prob < quantile(hab_prob, 0.9999, na.rm = TRUE)) |>
+  #   ggplot(aes(hab_prob)) +
+  #     geom_histogram() +
+  #     xlab('Habitat inclusion probability') +
+  #     ylab('') +
+  #     theme_minimal() +
+  #     theme(legend.position = 'bottom')
+
+  # plot incl prob across ecoregion
+  p_eco <- hexas_eco |>
+    filter(hab_prob < quantile(hab_prob, 0.99, na.rm = TRUE)) |>
+    ggplot() +
+      geom_sf(aes(fill = hab_prob), color ='transparent') +
+      coord_sf(crs = 4326) +
+      theme_minimal() +
+      xlab('') + ylab('') +
+      scale_fill_viridis()
+
+  print(p_hab)
+  print(p_eco)
+}
+```
