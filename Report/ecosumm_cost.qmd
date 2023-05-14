@@ -1,0 +1,45 @@
+# Ecoregion summary: cost {#sec-ecoSumm-cost}
+
+```{r setup,echo=TRUE,results='hide',warning=FALSE,message=FALSE,echo=FALSE}
+library(tidyverse)
+library(viridis)
+library(sf)
+
+hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS'))
+```
+
+
+```{r printPlotFunc,echo=FALSE,eval=TRUE,fig.width=8,fig.height=6}
+ecos <- hexas |>
+  pull(ecoregion) |>
+  parse_number() |>
+  unique()
+```
+
+
+```{r,echo=FALSE,eval=TRUE,fig.width=8,fig.height=6,warning=FALSE,message=FALSE}
+for(Eco in ecos)
+{
+  p1 <- hexas |>
+    filter(ecoregion == Eco) |>
+    ggplot(aes(costSum)) +
+      geom_histogram() +
+      theme_minimal() +
+      xlab('Hexagon total cost ($)') +
+      ylab('') +
+      labs(title = paste0('Ecoregion ', Eco))
+
+  p2 <- hexas |>
+    filter(ecoregion == Eco) |>
+    ggplot() +
+      geom_sf(aes(fill = cost_prob), color = 'transparent') +
+      coord_sf(crs = 4326) +
+      theme_minimal() +
+      xlab('') + ylab('') +
+      scale_fill_viridis() +
+      labs(fill = 'Cost probability')
+  
+  print(p1)
+  print(p2)
+}
+```
