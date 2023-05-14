@@ -4,8 +4,20 @@
 library(tidyverse)
 library(viridis)
 library(sf)
+library(patchwork)
 
-hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS'))
+eco_sim = c(
+    '7', '28', '30', '31',
+    '46', '47', '48', '49',
+    '73', '77', '78', '86',
+    '72', '74', '75', '76',
+    '96', '99', '100', '101',
+    '102', '103', '117',
+    '216', '217'
+)
+
+hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS')) |>
+  filter(ecoregion %in% eco_sim)
 ```
 
 ```{r habitatColor,warning=FALSE,message=FALSE,echo=FALSE,eval=TRUE}
@@ -36,7 +48,7 @@ habitat_colors <- c(
 
 
 
-```{r printPlotFunc,echo=FALSE,eval=TRUE,fig.width=8,fig.height=6}
+```{r printPlotFunc,echo=FALSE,eval=TRUE,fig.width=8,fig.height=6,warning=FALSE,message=FALSE}
 ecos <- hexas |>
   pull(ecoregion) |>
   parse_number() |>
@@ -94,19 +106,28 @@ for(eco in ecos)
             ylab('Distribution of habitat types across hexagons') +
             xlab('') +
             labs(
-              title = paste0('Ecoregion ', eco)
-            ) +
-            theme_minimal()
+              title = paste0('Ecoregion ', eco),
+              fill = 'Habitat type'
+            )
 
-  # # plot p histogram
-  # p_hist <- hexas_eco |>
-  #   filter(hab_prob < quantile(hab_prob, 0.9999, na.rm = TRUE)) |>
-  #   ggplot(aes(hab_prob)) +
-  #     geom_histogram() +
-  #     xlab('Habitat inclusion probability') +
-  #     ylab('') +
-  #     theme_minimal() +
-  #     theme(legend.position = 'bottom')
+  # proportion of NA
+  propNA_hist <- hexas_eco |>
+    ggplot(aes(propNA)) +
+      geom_histogram() +
+      xlab('Proportion of NA pixels within a hexagon') +
+      ylab('') +
+      theme_minimal()
+
+  # plot p histogram
+  p_hist <- hexas_eco |>
+    filter(hab_prob < quantile(hab_prob, 0.99, na.rm = TRUE)) |>
+    ggplot(aes(hab_prob, fill = ..x..)) +
+      geom_histogram() +
+      xlab('Habitat inclusion probability') +
+      ylab('') +
+      theme_minimal() +
+      scale_fill_viridis() +
+      theme(legend.position = 'none')
 
   # plot incl prob across ecoregion
   p_eco <- hexas_eco |>
@@ -116,9 +137,12 @@ for(eco in ecos)
       coord_sf(crs = 4326) +
       theme_minimal() +
       xlab('') + ylab('') +
-      scale_fill_viridis()
+      scale_fill_viridis() +
+      labs(fill = 'Habitat probability') +
+      theme(legend.position = 'bottom')
 
   print(p_hab)
+  print(p_hist | propNA_hist)
   print(p_eco)
 }
 ```
