@@ -34,13 +34,19 @@ lg <- read_csv(
       crs = st_crs(hx)
   )
 
-# intersect legacy points with hexagon polygons
-nbLegacy <- hx |>
-    st_contains(lg, sparse = FALSE) |>
-    apply(1, sum)
+# Because of memory limitations on GitHub actions the following commented
+# section is not run and we will simply load the produced vector from Report/data
+# # intersect legacy points with hexagon polygons
+# nbLegacy <- hx |>
+#     st_contains(lg, sparse = FALSE) |>
+#     apply(1, sum)
 
-# merge to hexas attribute tables
-hexas$legacySites <- nbLegacy
+# # merge to hexas attribute tables
+# hexas$legacySites <- nbLegacy
+
+hexas$legacySites <- readRDS(
+  file.path('data', 'nbLegacyHex_vec.RDS')
+)
 
 # load legacy buffer
 buffer_size <- read_csv(
