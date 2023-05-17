@@ -32,6 +32,7 @@ book:
       - ecosumm_habitat.qmd
       - ecosumm_cost.qmd
       - ecosumm_legacySites.qmd
+      - ecosumm_selection.qmd
     - references.qmd
 
 bibliography: references.bib
