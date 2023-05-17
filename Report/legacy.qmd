@@ -253,14 +253,14 @@ Finally, it enables us to accommodate the number and distribution of historical 
 
 ```{r adj_sampleSize2,echo=FALSE,message=FALSE,warning=FALSE,fig.width=8,fig.height=4}
 #| label: fig-adj-sampleSize2
-#| fig-cap: "Grid of sample units and historical sites (red dots) for a simulated region. Using the same approach for adjusting the inclusion probability, a buffer around each historical site is created to calculate the adjusted sampled size."
+#| fig-cap: "Grid of sample units and historical sites spatially balanced (blue) and unbalanced (red) for a simulated region. Using the same approach for adjusting the inclusion probability, a buffer around each historical site is created to calculate the adjusted sampled size."
 
 buffSize <- .33
 
 p1 <- ggplot(fake_hex) +
     geom_sf(fill = 'white', color = 'grey') +
-    geom_sf(data = fake_hex[balanced_ls], fill = '#D41159', color = 'grey') +
-    geom_sf(data = st_union(st_buffer(fake_hex[balanced_ls], dist = buffSize)), fill = '#D41159', color = 'transparent', alpha = .4) +
+    geom_sf(data = fake_hex[balanced_ls], fill = '#1A85FF', color = 'grey') +
+    geom_sf(data = st_union(st_buffer(fake_hex[balanced_ls], dist = buffSize)), fill = '#1A85FF', color = 'transparent', alpha = .4) +
     theme_minimal() +
     xlim(.25, 7.8) + ylim(.25, 7.75) +
     theme(
@@ -273,8 +273,8 @@ p1 <- ggplot(fake_hex) +
 
 p2 <- ggplot(fake_hex) +
     geom_sf(fill = 'white', color = 'grey') +
-    geom_sf(data = fake_hex[unbalanced_ls], fill = '#1A85FF', color = 'grey') +
-    geom_sf(data = st_union(st_buffer(fake_hex[unbalanced_ls], dist = buffSize)), fill = '#1A85FF', color = 'transparent', alpha = .4) +
+    geom_sf(data = fake_hex[unbalanced_ls], fill = '#D41159', color = 'grey') +
+    geom_sf(data = st_union(st_buffer(fake_hex[unbalanced_ls], dist = buffSize)), fill = '#D41159', color = 'transparent', alpha = .4) +
     theme_minimal() +
     xlim(.25, 7.8) + ylim(.25, 7.75) +
     theme(
