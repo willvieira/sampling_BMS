@@ -1,5 +1,17 @@
 # Ecoregion summary: habitat {#sec-ecoSumm-habitat}
 
+This section provides a summary of the information obtained from the habitat type layer for each ecoregion.
+The frequency of each habitat type is extracted for every hexagon within the study area.
+The initial figure displays the relative frequency of habitat types for three classes of hexagons categorized based on their habitat inclusion probability.
+The first class consists of all hexagons in the ecoregion, while the other two classes only contain hexagons with the highest inclusion probability according to their quantile distribution.
+
+The subsequent histograms illustrate the distribution of habitat inclusion probability and the proportion of NA pixels within each hexagon.
+For the habitat inclusion probability histogram, the two dashed lines are used to describe the 80% and 95% quantile distribution illustrated in the first figure.
+The final figure displays the spatial distribution of habitat inclusion probability across the ecoregion.
+It's worth noting that in most ecoregions, the distribution of habitat inclusion probability is highly skewed, with only a few hexagons having a very large inclusion probability.
+This skewed distribution can make it challenging to visualize the gradient of inclusion probability.
+To avoid this issue, we removed the hexagons with the top 0.1% inclusion probability to improve the clarity of the inclusion probability gradient.
+
 ```{r setup,echo=TRUE,results='hide',warning=FALSE,message=FALSE,echo=FALSE}
 library(tidyverse)
 library(viridis)
@@ -94,7 +106,7 @@ for(eco in ecos)
           incl_prob_class = recode_factor(
             incl_prob_class,
             `all` = 'All hexagons',
-            `2` = 'Hexagons with 0.85% < p < 0.95%',
+            `2` = 'Hexagons with 0.8% < p < 0.95%',
             `3` = 'Hexagons with p > 0.95%'
           )
         ) |>
@@ -103,7 +115,7 @@ for(eco in ecos)
             scale_y_continuous(labels = scales::percent) +
             scale_fill_manual(values = habitat_colors) +
             theme_minimal() +
-            ylab('Distribution of habitat types across hexagons') +
+            ylab('Relative frequency of habitat types across hexagons') +
             xlab('') +
             labs(
               title = paste0('Ecoregion ', eco),
@@ -118,11 +130,24 @@ for(eco in ecos)
       ylab('') +
       theme_minimal()
 
+  # compute quatile distribution of habitat
+  hab_prob_qn <- quantile(
+    hexas_eco$hab_prob,
+    probs = c(0.8, 0.95),
+    na.rm = T
+  )
+  
   # plot p histogram
-  p_hist <- hexas_eco |>
+  #p_hist <- 
+  hexas_eco |>
     filter(hab_prob < quantile(hab_prob, 0.99, na.rm = TRUE)) |>
     ggplot(aes(hab_prob, fill = ..x..)) +
       geom_histogram() +
+      geom_vline(
+        xintercept = hab_prob_qn,
+        linetype = 'dashed',
+        alpha = 0.6
+      ) +
       xlab('Habitat inclusion probability') +
       ylab('') +
       theme_minimal() +
