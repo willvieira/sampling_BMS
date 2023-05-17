@@ -1,6 +1,6 @@
 # Ecoregion summary: habitat {#sec-ecoSumm-habitat}
 
-This section provides a summary of the information obtained from the habitat type layer for each ecoregion.
+This section provides a summary of the information obtained from the habitat type layer for each ecoregion (detailed in @sec-habitat-info).
 The frequency of each habitat type is extracted for every hexagon within the study area.
 The initial figure displays the relative frequency of habitat types for three classes of hexagons categorized based on their habitat inclusion probability.
 The first class consists of all hexagons in the ecoregion, while the other two classes only contain hexagons with the highest inclusion probability according to their quantile distribution.
@@ -164,7 +164,7 @@ for(eco in ecos)
       xlab('') + ylab('') +
       scale_fill_viridis() +
       labs(fill = 'Habitat probability') +
-      theme(legend.position = 'bottom')
+      theme(legend.position = 'left')
 
   print(p_hab)
   print(p_hist | propNA_hist)

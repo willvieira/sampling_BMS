@@ -1,4 +1,11 @@
-# Ecoregion summary: legacy sites {#sec-ecoSumm-legacy}
+# Ecoregion summary: historical sites {#sec-ecoSumm-historicalsites}
+
+Historical sites are survey points present in the study area, and a hexagon can contain multiple historical sites.
+The first figure illustrates the distribution of the number of historical sites within a hexagon throughout the ecoregion.
+The second image displays the spatial distribution of historical sites in the ecoregion, with each hexagon's color indicating the number of legacy sites present.
+Around each historical sites, two buffers describe the effect of the historical hexagons on (i) the inclusion probability of neighboring hexagons (dark red) and (ii) the sample size (light red).
+While the buffer for adjusting the inclusion probability of neighboring hexagons is fixed at 10 kilometers, the buffer for adjusting the sample size varies depending on the ecoregion.
+For further information, please refer to @sec-legacy-sites.
 
 ```{r setup,echo=TRUE,results='hide',warning=FALSE,message=FALSE,echo=FALSE}
 library(tidyverse)
@@ -83,7 +90,7 @@ for(eco in ecos)
     filter(legacySites > 0) |>
     ggplot(aes(legacySites, fill = ..x..)) +
       geom_histogram() +
-      xlab('Number of legacy sites within an hexagon') +
+      xlab('Number of histotical sites within a hexagon') +
       ylab('') +
       theme_minimal() +
       scale_fill_viridis() +

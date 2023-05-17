@@ -1,5 +1,9 @@
 # Ecoregion summary: cost {#sec-ecoSumm-cost}
 
+This section provides a summary of the total cost and cost inclusion probability obtained from the different layers described in @sec-cost-info.
+The first figure is the histogram of total cost distribution across the hexagons of an ecoregion.
+The second figure illustrates the spatial distribution of cost inclusion probability within the ecoregion.
+
 ```{r setup,echo=TRUE,results='hide',warning=FALSE,message=FALSE,echo=FALSE}
 library(tidyverse)
 library(viridis)
