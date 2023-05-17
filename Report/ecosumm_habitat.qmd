@@ -138,8 +138,7 @@ for(eco in ecos)
   )
   
   # plot p histogram
-  #p_hist <- 
-  hexas_eco |>
+  p_hist <- hexas_eco |>
     filter(hab_prob < quantile(hab_prob, 0.99, na.rm = TRUE)) |>
     ggplot(aes(hab_prob, fill = ..x..)) +
       geom_histogram() +
