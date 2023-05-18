@@ -77,7 +77,7 @@ ecos <- hexas |>
 
 for(eco in ecos)
 {
-  cat("## Ecoregion", Eco, "\n\n")
+  cat("## Ecoregion", eco, "\n\n")
 
   eco_layer <- hexas |>
     filter(ecoregion == eco) |>
