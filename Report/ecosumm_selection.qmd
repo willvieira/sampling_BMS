@@ -21,12 +21,16 @@ selected_hexas <- readRDS(file.path('data', 'hex_selected.RDS')) |>
 
 
 ```{r print,echo=FALSE,message=FALSE,warning=FALSE,eval=TRUE,fig.width=8,fig.height=6}
+#| results: asis
+
 ecos <- selected_hexas |>
   pull(ecoregion) |>
   unique()
 
 for(eco in ecos)
 {
+  cat("## Ecoregion", Eco, "\n\n")
+
   eco_layer <- hexas |>
     filter(ecoregion == eco & propNA <= 0.8) |>
     st_union()
@@ -50,8 +54,7 @@ for(eco in ecos)
        ) +
       scale_color_manual(
         values = c('#e41a1c','#4daf4a','#377eb8')
-      ) +
-      labs(title = paste0('Ecoregion ', eco))
+      )
 
   print(p)
 }

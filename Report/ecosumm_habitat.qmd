@@ -61,6 +61,8 @@ habitat_colors <- c(
 
 
 ```{r printPlotFunc,echo=FALSE,eval=TRUE,fig.width=8,fig.height=6,warning=FALSE,message=FALSE}
+#| results: asis
+
 ecos <- hexas |>
   pull(ecoregion) |>
   parse_number() |>
@@ -68,6 +70,8 @@ ecos <- hexas |>
 
 for(eco in ecos)
 {
+  cat("## Ecoregion", Eco, "\n\n")
+
   hexas_eco <- hexas |>
     filter(ecoregion == eco)
 
@@ -117,10 +121,7 @@ for(eco in ecos)
             theme_minimal() +
             ylab('Relative frequency of habitat types across hexagons') +
             xlab('') +
-            labs(
-              title = paste0('Ecoregion ', eco),
-              fill = 'Habitat type'
-            )
+            labs(fill = 'Habitat type')
 
   # proportion of NA
   propNA_hist <- hexas_eco |>

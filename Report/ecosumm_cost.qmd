@@ -33,16 +33,19 @@ ecos <- hexas |>
 
 
 ```{r,echo=FALSE,eval=TRUE,fig.width=8,fig.height=6,warning=FALSE,message=FALSE}
+#| results: asis
+
 for(Eco in ecos)
 {
+  cat("## Ecoregion", Eco, "\n\n")
+
   p1 <- hexas |>
     filter(ecoregion == Eco) |>
     ggplot(aes(costSum)) +
       geom_histogram() +
       theme_minimal() +
       xlab('Hexagon total cost ($)') +
-      ylab('') +
-      labs(title = paste0('Ecoregion ', Eco))
+      ylab('')
 
   p2 <- hexas |>
     filter(ecoregion == Eco) |>
