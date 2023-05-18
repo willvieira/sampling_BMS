@@ -28,7 +28,7 @@ ecos <- selected_hexas |>
 for(eco in ecos)
 {
   eco_layer <- hexas |>
-    filter(ecoregion == eco) |>
+    filter(ecoregion == eco & propNA <= 0.8) |>
     st_union()
 
   p <- eco_layer |>

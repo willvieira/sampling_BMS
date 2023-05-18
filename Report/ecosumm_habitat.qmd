@@ -155,6 +155,7 @@ for(eco in ecos)
 
   # plot incl prob across ecoregion
   p_eco <- hexas_eco |>
+    filter(propNA <= 0.8) |>
     filter(hab_prob < quantile(hab_prob, 0.99, na.rm = TRUE)) |>
     ggplot() +
       geom_sf(aes(fill = hab_prob), color ='transparent') +
