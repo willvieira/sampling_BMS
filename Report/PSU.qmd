@@ -1,19 +1,133 @@
 # Primary sampling unity {#sec-psu}
 
-- The stratified selection of hexagons (PSUs) is performed using the GRTS algorithm.
+The GRTS algorithm is used for the stratified selection of hexagons (PSUs) to ensure spatially balanced samples in a region.
+In our case, the GRTS sampling is stratified at the ecoregion level, meaning that the random tessellation for spatially balanced hexagons is carried out separately for each ecoregion.
+Thus, the sample size and inclusion probabilities are determined at the ecoregion stratum level.
+In the previous section, we discussed in detail the process to define the inclusion probability of each PSU hexagon within an ecoregion using three layers of information: habitat, cost, and historical sites.
+In this section, we explain how we combine these three layers of information into a single value of inclusion probability, which weighs the selected PSU according to the frequency of habitat, the cost of sampling, and the proximity to a historical site.
+We then describe the necessary parameters for the GRTS.
+Finally, we detail the GRTS output layers and the export process.
+While this section provides an overview of our approach, along with key decision, we have also developed a detailed guide that includes step-by-step instructions that accompany the R code to demonstrate how to implement the sampling design.
 
-## User defined parameters
+## Inclusion probabilities
 
-The user has to define some parameters when running the GRTS such as:
-- List of ecoregions to sample
-- Sample effort
-- Number of replications
-- A csv file with at least latitude and longitude information for each legacy site
-- The folder to save the selected hexagons
+Following the BOSS design [@Wilgenburg2020], the first step in defining the hexagon inclusion probability is to merge the habitat and cost probabilities.
+Given they have similar importance weight, the inclusion probability of a hexagon $h$ from an ecoregion $e$ is defined by:
+
+$$
+  P_{h, e} = \frac{P_{habitat_{h, e}} \times P_{cost_{h}}}{\sum^{h_n}{(P_{habitat_{h, e}} \times P_{cost_{h}})}}
+$$
+
+Where $P_{habitat}$ is the habitat inclusion probability (@sec-habitat-info) and $P_{cost}$ is the cost inclusion probability (@sec-cost-info).
+The product of inclusion probabilities between habitat and cost layers is normalized so that it adds up to 1 across all available hexagons within the study area.
+
+The final stage involves modifying the inclusion probability $P_{h,e}$ for neighboring hexagons located near historical sites.
+To achieve this, we used the `MBHdesign` R package, which adjusts the inclusion probability according to a predefined `bufferSize_p` parameter (discuted bellow).
+The method employed in the R package uses a Gaussian function to reduce the inclusion probability on neighboring hexagons, with its impact diminishing as distance from the historical site increases (more details in @sec-legacy-sites).
+
+## User paramaters
+
+To run the GRTS, the first required parameter is the list of ecoregions to be included in the sampling design, which enables us to concentrate on particular ecoregions of interest.
+In order to ensure that the selected hexagons have natural habitats suitable for sampling, we apply a filter to keep only the hexagons with a specific proportion of non-NA pixels.
+The `prop_na` parameter is used to define this threshold, our default value was defined to 0.8 which means that a hexagon must have at least 20% of natural habitat to be available for sampling.
+
+After filtering the ecoregions and hexagons following the above rules, the next step is to determine the sample effort.
+As discuted in @sec-sampling-frame, we determined the sample size solely based on the size of the ecoregion, with target of sampling 2% of the available hexagons (@tbl-ecozone).
+We then adjusted the sample size for each ecoregion based on the number and distribution of historical sites present in that ecoregion (@sec-legacy-sites).
+To do this, we need a list of historical sites and their coordinates to adjust the sample size.
+We also need the `bufferSize_N` parameter to determine the range of influence of historical sites on reducing the sample size.
+This parameter can be either a list of buffer sizes for each ecoregion or a single distance value applied to all ecoregions.
+Similarly, we used the `bufferSize_p` parameter to determine the range effect of the historical sites on the inclusion probability.
+Finally, we set the number of replications for the GRTS algorithm to run.
+
+## Selected layers
+
+We used the `grts()` function available in the R package `spsurvey` version v5.0 or above.
+To run the function, we have to provide few arguments.
+The first argument is the `sframe`, which consists of the point grid and included the coordinates of the hexagon centroid.
+The second argument is the `n_base`, which specifies the sample size for each ecoregion stratum.
+We used the same stratum object for the `n_over` argument, which samples a supplementary layer of hexagons (herein called the over layer) available if any of the main hexagons were unavailable for any reason.
+The final two arguments are the column names for the stratum name (ecoregion code) and the inclusion probability of each hexagon point sample.
+
+After defining the arguments, we execute the GRTS function with `nb_rep` replications.
+For each replication, we compute the total cost of sampling all selected main hexagons in the study area and select the replication with the lowest cost.
+Since the over layer obtained by the grts sampling is randomly selected in the stratum space, we also create an additional layer of hexagons that are obligatory next to the selected main hexagons.
+For each selected main hexagon, we extract all neighboring hexagons and choose the one with the highest inclusion probability.
+If a selected main hexagon has no available neighboring hexagon, we will randomly select one within the ecoregion.
+
+After running the GRTS sampling, we obtain three layers of PSU hexagons: main, over, and extra.
+We export these layers of selected hexagons in two different ways.
+The first one is a single shapefile for each layer of selected hexagons.
+The second way is shared the three layers of selected hexagons into a folder specific to the ecoregion.
+After defining the output folder to save, and the prefix arguments, the final tree of exported files follows:
+
+Once the GRTS sampling is completed, we obtain three layers of selected PSU hexagons called *main*, *over*, and *extra*, plus the layer with all available hexagons of the study area called *ALL*.
+We export these layers of selected hexagons in two different ways.
+The first way is to export each layer as a separate shapefile and all ecoregion together.
+The second way, the three layers of selected hexagons are shared into a folder dedicated to the specific ecoregion.
+To export these files, we need to define the output folder to save the files and the prefix arguments to be added at the end of each shapefile.
+For instance, let's define the parameter `outputFolder` to *selection* and the parameter `fileSuffix` to *V2023*.
+The exported PSU file tree for the hypothetical ecoregions 101, 102, 10`, and 104 will have the following format:
+
+```{r dirExample,echo=FALSE,results=FALSE,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(fs)
+
+tmp_dir <- tempdir()
+outputFolder <- 'selection'
+eco_sim <- 101:104
+suffix <- 'V2023'
+
+file.path(tmp_dir, outputFolder, c('allEcoregion', 'byEcoregion')) |>
+  map(~ dir.create(.x, recursive = TRUE))
+
+file.path(
+  tmp_dir,
+  outputFolder,
+  'allEcoregion',
+  paste0(
+    'PSU-SOQB_',
+    c('ALL', 'main', 'over', 'extra'),
+    '-',
+    suffix,
+    '.shp'
+  )
+) |>
+map(file.create)
+
+file.path(
+  tmp_dir,
+  outputFolder,
+  'byEcoregion',
+  paste0(
+    'ecoregion_',
+    eco_sim
+  )
+) |>
+map(dir.create)
+
+expand.grid(
+    eco = eco_sim,
+    sim = c('ALL', 'main', 'over', 'extra')
+) |>
+mutate(
+  fileName = file.path(
+    tmp_dir,
+    outputFolder,
+    'byEcoregion',
+    paste0(
+      'ecoregion_', eco, '/PSU-SOBQ_eco', eco, '_', sim, '-', suffix, '.shp'
+    )
+  )
+) |>
+select(fileName) |>
+map(file.create)
+
+```
 
 
-## GRTS
+```{r,echo=FALSE}
+#| class-output: bash
 
-- The GRTS samples hexagons for N replication times.
-- The cheapest replication is selected.
-- Once the main hexagons are selected by the GRTS, we manually select an available neighbour hexagon with the highest inclusion probability.
+fs::dir_tree(file.path(tmp_dir, outputFolder))
+```
