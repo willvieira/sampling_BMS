@@ -56,7 +56,7 @@ Finally, the inclusion probability of each hexagon is calculated by taking into 
 For each hexagon $h$ from an ecoregion $e$, their habitat inclusion probability is calculated from all habitat types $i$ following the equation:
 
 $$
-    P_{h, e} = \sum_{i=H_1}^{H} C(i, e) \times P_{i, e}
+    P_{habitat_{h, e}} = \sum_{i=H_1}^{H} C(i, e) \times P_{i, e}
 $$
 
 ## Example: Ecoregion 102
