@@ -1,8 +1,8 @@
 # Ecoregion summary: selected hexagons {#sec-ecoSumm-selectedhexas}
 
 This section displays the selected PSUs (Primary Sampling Units) for each ecoregion in the 2023 sampling design version.
-The GRTS method selects one main hexagon (marked in red) and one over hexagon (blue) for each ecoregion.
-As the over hexagon is chosen randomly, we additionally select an extra hexagon (yellow) next to each main hexagon with the highest inclusion probability among its neighboring hexagons.
+The GRTS method selects one main hexagon (marked in green) and one over hexagon (blue) for each ecoregion.
+As the over hexagon is chosen randomly, we additionally select an extra hexagon (red) next to each main hexagon with the highest inclusion probability among its neighboring hexagons.
 
 ```{r setup,echo=TRUE,results='hide',warning=FALSE,message=FALSE,echo=FALSE}
 library(tidyverse)
@@ -44,7 +44,14 @@ for(eco in ecos)
       ) +
       coord_sf(crs = 4326) +
       theme_minimal() +
-      xlab('') + ylab('')
+      xlab('') + ylab('') +
+      scale_fill_manual(
+        values = c('#e41a1c','#4daf4a','#377eb8')
+       ) +
+      scale_color_manual(
+        values = c('#e41a1c','#4daf4a','#377eb8')
+      ) +
+      labs(title = paste0('Ecoregion ', eco))
 
   print(p)
 }
