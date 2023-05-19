@@ -6,7 +6,7 @@ library(viridis)
 library(sf)
 library(patchwork)
 
-hexas <- readRDS(file.path('data', 'hexa_complete.RDS'))[1, ]
+hexas <- readRDS(file.path('..', 'data', 'hexa_complete.RDS'))[1, ]
 
 # paramter
 ssu_dist = 294
