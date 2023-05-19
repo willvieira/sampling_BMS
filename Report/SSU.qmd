@@ -83,7 +83,7 @@ hexas |>
 ```
 
 For each SSU point within the PSU, we generate a buffer with a distance of 147 meters.
-We then extract the habitat pixels to compute the inclusion probability of each SSU point following the same approach used for the PSU (@#sec-habitat-info).
+We then extract the habitat pixels to compute the inclusion probability of each SSU point following the same approach used for the PSU (@sec-habitat-info).
 This process allows us to calculate the habitat inclusion probability and the proportion of non-empty habitats pixels for each SSU hexagon.
 
 The final Step in the process of prepareing the SSU for sampling is to assign a matrix of neighouring SSU points for each focal SSU.
@@ -110,7 +110,7 @@ In this pattern, 0 denotes the focal point, while 1 to 6 represent the six neigh
 
 ```{r sampleSSU,echo=FALSE,warning=FALSE,message=FALSE,echo=FALSE}
 #| label: fig-ssuPattern
-#| fig-cap: "The red dots represent the Secondary Sampling Units (SSUs), which are spatially separated from each other by a distance of 294 meters. A buffer with a diameter of 147 meters was created around each SSU to extract the habitat pixels."
+#| fig-cap: "Selected SSU points (green) and their respectice neighboring (yellow)."
 
 hx_ssu$sampled <- 0
 hx_ssu$sampled[c(66, 107, 185, 37, 203, 121)] <- 1:6
