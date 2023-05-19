@@ -1,13 +1,248 @@
 # Secondary sampling unity {#sec-ssu}
 
-- For each selected hexagon, a grid of small hexagons spaced of 294 meters are create to perform the secondary sampling (SSU).
-- For each SSU hexagon within the SSU, habitat pixels are extract to compute a new layer of habitat inclusion probability following the same approach used for the PSU.
-- A SSU is defined as available given the following rules:
-    - Must have 6 neighbours (less than that means it's a border SSU)
-    - Must have at least 1 - `prop_na` of non empty pixels
-    - 4 out 6 neighbours must also respect the above rule
+```{r setup,echo=FALSE,warning=FALSE,message=FALSE,echo=FALSE}
+library(tidyverse)
+library(viridis)
+library(sf)
+library(patchwork)
+
+hexas <- readRDS(file.path('data', 'hexa_complete.RDS'))[1, ]
+
+# paramter
+ssu_dist = 294
+```
+
+In this section we provide a detail our approach for selecting the Secondary Sampling Units (SSUs).
+Unlike the PSU sampling, the SSU sampling approach differs significantly from the BOSS design.
+For each selected hexagon, we create a grid of SSU points spaced 294 meters apart to perfrom the sampling (@fig-SSUbuff).
+The chosen spacing value was optimized using the Ontario regionalization method to ensure that each hexagon contains an equal number of SSUs.
+
+```{r plotSSU,echo=FALSE,warning=FALSE,message=FALSE,echo=FALSE}
+#| label: fig-SSUbuff
+#| fig-cap: "The green dots represent the Secondary Sampling Units (SSUs), which are spatially separated from each other by a distance of 294 meters. A buffer with a diameter of 147 meters was created around each SSU to extract the habitat pixels."
+
+genSSU <- function(h, spacing)
+{
+    ch <- as_tibble(st_coordinates(h))
+    top_point <- ch[which.max(ch$Y),]
+    bottom_point <- ch[which.min(ch$Y),]
+    gridsize <- 2*floor(abs(top_point$Y-bottom_point$Y)/spacing)+3
+    rowAngle <- tanh((top_point$X-bottom_point$X)/(top_point$Y-bottom_point$Y))
+
+    cent <- st_centroid(h) %>%
+        bind_cols(as_tibble(st_coordinates(.))) %>%
+        st_drop_geometry %>%
+        dplyr::select(ET_Index, X, Y)
+
+    genRow <- function(cX, cY, sp,...){
+        tibble(rowid = seq(-gridsize,gridsize)) %>%
+        mutate(X = sin(60*pi/180+rowAngle) *sp*rowid + {{cX}},
+                Y = cos(60*pi/180+rowAngle) *sp*rowid  + {{cY}})
+    }
+
+    centroids <- tibble(crowid=seq(-gridsize,gridsize)) %>%
+        mutate(cY = cos(rowAngle) *spacing*crowid + cent$Y,
+            #spacing/2*crowid + cent$Y,
+            cX =  sin(rowAngle) *spacing*crowid + cent$X) %>%
+        #cent$X + crowid* sqrt(spacing**2-(spacing/2)**2)) %>%
+        rowwise() |>
+        mutate(row = list(genRow(cX = cX,cY = cY,sp = spacing))) %>%
+        unnest(row) |>
+        dplyr::select(X,Y) %>%
+        st_as_sf(coords = c("X", "Y"), crs = st_crs(h)) %>%
+        st_filter(h) %>%
+        mutate(
+            ET_Index = h$ET_Index,
+            ecoregion = h$ecoregion,
+            ssuID = row_number()
+        )
+    return(centroids)
+}
+
+hx_ssu <- genSSU(hexas, spacing = ssu_dist)
+
+hexas |> 
+  ggplot() +
+  geom_sf(
+    fill = '#f5f5f5'
+  ) +
+  geom_sf(
+    data = hx_ssu |>
+      st_buffer(ssu_dist/2),
+    alpha =.5,
+    fill = '#66c2a5',
+    color = 'transparent'
+  ) +
+  geom_sf(
+    data = hx_ssu,
+    color = '#66c2a5'
+  ) +
+  coord_sf(crs = 4326) +
+  theme_minimal() +
+  xlab('') + ylab('')
+```
+
+For each SSU point within the PSU, we generate a buffer with a distance of 147 meters.
+We then extract the habitat pixels to compute the inclusion probability of each SSU point following the same approach used for the PSU (@#sec-habitat-info).
+This process allows us to calculate the habitat inclusion probability and the proportion of non-empty habitats pixels for each SSU hexagon.
+
+The final Step in the process of prepareing the SSU for sampling is to assign a matrix of neighouring SSU points for each focal SSU.
+This is important because each SSU is classified as available to be sampled in function of its proportion of non-empty habitats pixels, the number of neighbours SSU, and the proportion of non-empty habitats pixels of the neighbours SSUs.
+Specifically, for a SSU to be available for sampling it must have:
+
+The next step is to assign a matrix of neighboring SSU points for each focal SSU.
+This is crucial because the availability of each SSU for sampling is determined based on its proportion of non-empty habitat pixels, the number of neighboring SSUs, and the proportion of non-empty habitat pixels of those neighbors.
+Specifically, to be considered available for sampling, a SSU must meet the following criteria:
+
+- Have exactly 6 neighbors (fewer indicates being on the border of the PSU hexagon)
+- Possess at least 80% non-empty pixels (prop_na = 0.8), similar to the PSU sampling
+- Have at least 4 out of the 6 neighboring SSUs with at least 80% non-empty pixels
 
 
-## Export of selected SSUs
 
-Describe how each code used to name each selected SSU and its replacement
+After defining the availability of each SSU, we proceed with a random sampling of SSU points, weighted by their habitat inclusion probability.
+The SSU sampling is performed sequentially, meaning that for each SSU selected within a PSU hexagon, its six neighbors are automatically marked as unavailable for the next sampling round.
+This procedure prevents the clustering of SSU samples in a single region.
+The SSU sampling continues until it reaches the desired SSU sample size (defined by `ssu_N`), or until there are no more available SSUs remaining.
+The selected SSU points, along with their respective neighbors, are classified using the $A_B$ code pattern (@fig-ssuPattern).
+Here, $A$ represents the SSU sample ID, ranging from 1 to `ssu_N`, while $B$ represents the neighbor ID, ranging from 0 to 6.
+In this pattern, 0 denotes the focal point, while 1 to 6 represent the six neighbors, starting from the North point and moving clockwise.
+
+```{r sampleSSU,echo=FALSE,warning=FALSE,message=FALSE,echo=FALSE}
+#| label: fig-ssuPattern
+#| fig-cap: "The red dots represent the Secondary Sampling Units (SSUs), which are spatially separated from each other by a distance of 294 meters. A buffer with a diameter of 147 meters was created around each SSU to extract the habitat pixels."
+
+hx_ssu$sampled <- 0
+hx_ssu$sampled[c(66, 107, 185, 37, 203, 121)] <- 1:6
+hx_ssu_selected <- subset(hx_ssu, sampled > 0)
+
+# get neighbours of selected hexagons
+neighbour_mat <- st_intersects(
+    hx_ssu,
+    st_buffer(hx_ssu_selected, dist = ssu_dist + ssu_dist * 0.1),
+    sparse = FALSE
+)
+
+sel_points <- map(
+    1:nrow(hx_ssu_selected),
+    ~{
+      # get neighbours for specific row
+      nei_hx <- hx_ssu |> 
+          filter(
+              ssuID %in% which(
+                  neighbour_mat[, hx_ssu$ssuID[.x]]
+              )
+          )
+
+      # code A 
+      nei_hx$codeA <- hx_ssu_selected$sampled[.x]
+      
+      # code B
+      nei_hx$codeB <- c(4, 3, 5, 0, 2, 6, 1)
+
+      nei_hx
+    }
+  ) |>
+  bind_rows()
+
+hexas |>
+  ggplot() +
+  geom_sf(
+    fill = '#f5f5f5'
+  ) +
+  geom_sf(
+    data = hx_ssu,
+    alpha = .2
+  ) +
+  geom_sf_label(
+    data = sel_points |>
+      filter(sampled > 0),
+    aes(label = codeA),
+    fill = '#5ab4ac'
+  ) +
+  geom_sf_label(
+    data = sel_points |>
+      filter(sampled == 0),
+    aes(label = codeB),
+    fill = '#d8b365'
+  ) +
+  coord_sf(crs = 4326) +
+  theme_minimal() +
+  xlab('') + ylab('')
+```
+
+Once the sampling process is completed, we obtain multiple SSU points for each hexagon from one of the three layers of selected PSU hexagons: *main*, *over*, or *extra*.
+We export both all SSU points and the selected SSU points for each selected hexagon from the three PSU layers.
+The export of SSU points follows a similar approach to the export of PSU hexagons.
+We first export each layer as a separate shapefile, including all ecoregions together, and then create separate shapefiles for each ecoregion.
+Using the same export parameters utilized in the PSU sampling, the SSU shapefiles will be exported as follows:
+
+```{r dirExample,echo=FALSE,results=FALSE,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(fs)
+
+tmp_dir <- tempdir()
+outputFolder <- 'selection'
+eco_sim <- 101:104
+suffix <- 'V2023'
+
+file.path(tmp_dir, outputFolder, c('allEcoregion', 'byEcoregion')) |>
+  map(~ dir.create(.x, recursive = TRUE))
+
+expand.grid(
+  c('ALL', 'selected'),
+  c('main', 'over', 'extra')
+) |>
+mutate(
+  fileName = file.path(
+    tmp_dir,
+    outputFolder,
+    'allEcoregion',
+    paste0(
+      'SSU-SOQB_',
+      Var1, '_',
+      Var2, '-',
+      suffix,
+      '.shp'
+    )
+  )
+) |>
+select(fileName) |>
+map(file.create)
+
+file.path(
+  tmp_dir,
+  outputFolder,
+  'byEcoregion',
+  paste0(
+    'ecoregion_',
+    eco_sim
+  )
+) |>
+map(dir.create)
+
+expand.grid(
+    eco = eco_sim,
+    hex = c('ALL', 'selected'),
+    sim = c('main', 'over', 'extra')
+) |>
+mutate(
+  fileName = file.path(
+    tmp_dir,
+    outputFolder,
+    'byEcoregion',
+    paste0(
+      'ecoregion_', eco, '/SSU-SOBQ_eco', eco, '_', hex, '_', sim, '-', suffix, '.shp'
+    )
+  )
+) |>
+select(fileName) |>
+map(file.create)
+
+```
+
+```{r,echo=FALSE}
+#| class-output: bash
+
+fs::dir_tree(file.path(tmp_dir, outputFolder))
+```
