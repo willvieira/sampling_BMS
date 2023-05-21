@@ -104,7 +104,7 @@ After defining the availability of each SSU, we proceed with a random sampling o
 The SSU sampling is performed sequentially, meaning that for each SSU selected within a PSU hexagon, its six neighbors are automatically marked as unavailable for the next sampling round.
 This procedure prevents the clustering of SSU samples in a single region.
 The SSU sampling continues until it reaches the desired SSU sample size (defined by `ssu_N`), or until there are no more available SSUs remaining.
-The selected SSU points, along with their respective neighbors, are classified using the $A_B$ code pattern (@fig-ssuPattern).
+The selected SSU points, along with their respective neighbors, are classified using the $AB$ code pattern (@fig-ssuPattern).
 Here, $A$ represents the SSU sample ID, ranging from 1 to `ssu_N`, while $B$ represents the neighbor ID, ranging from 0 to 6.
 In this pattern, 0 denotes the focal point, while 1 to 6 represent the six neighbors, starting from the North point and moving clockwise.
 
