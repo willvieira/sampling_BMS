@@ -4,18 +4,18 @@
 is_html = knitr::is_html_output()
 ```
 
-This webpage contains the technical report detailing the Sampling design for monitoring boreal birds in Quebec.
+This webpage presents the technical report describing the sampling design developed for monitoring boreal birds in Quebec, as part of a nationwide effort to track bird populations across the underrepresented boreal region. The Quebec design follows the Boreal Optimal Sampling Strategy (BOSS), a hierarchical, spatially balanced sampling approach that integrates habitat distribution, cost constraints, and the use of legacy and iconic survey sites to optimize representativeness while reducing sampling costs. In this report, we detail the spatial layers, simulations, and methodological adaptations specific to Quebec, as well as the steps used to determine sample sizes and select survey locations with the Generalized Random Tessellation Stratified Sampling (GRTS) method.
 
-The online version of this report is hosted at [willvieira.github.io/sampling_BMS](https://willvieira.github.io/sampling_BMS/) and is automatically built whenever the code repository at [github.com/sampling_BMS](https://github.com/willvieira/sampling_BMS) is modified.
+The online version of this report is hosted at [willvieira.github.io/sampling_BMS](https://willvieira.github.io/sampling_BMS/) and is automatically rebuilt whenever updates are made to the code repository ([github.com/sampling_BMS](https://github.com/willvieira/sampling_BMS)).
 
 ```{asis index-2, echo=is_html}
-The current build status is:
+Current build status:
 
 [![](https://github.com/willvieira/sampling_BMS/actions/workflows/build.yml/badge.svg){fig-align="left"}](https://github.com/willvieira/sampling_BMS/actions/workflows/build.yml)
 ```
 
 ```{r index-2-2, echo=FALSE, results="asis"}
-cat(paste0("This version of the report was built on GitHub Actions on ", Sys.Date(), "."))
+cat(paste0("This version of the report was generated on ", Sys.Date(), " via GitHub Actions."))
 ```
 
 ## License
